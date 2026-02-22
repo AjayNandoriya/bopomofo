@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import Translation from './pages/Translation'
 import Stories from './pages/Stories'
+import Songs from './pages/Songs'
 
 function NavLink({ to, children }) {
   const location = useLocation();
@@ -10,8 +11,8 @@ function NavLink({ to, children }) {
     <Link
       to={to}
       className={`px-4 py-2 rounded-md transition-colors font-medium ${isActive
-          ? 'bg-neutral-900 text-white'
-          : 'text-neutral-600 hover:bg-neutral-100'
+        ? 'bg-neutral-900 text-white'
+        : 'text-neutral-600 hover:bg-neutral-100'
         }`}
     >
       {children}
@@ -30,6 +31,7 @@ function Layout() {
         <div className="flex gap-2">
           <NavLink to="/">Translation</NavLink>
           <NavLink to="/stories">Stories</NavLink>
+          <NavLink to="/songs">Songs</NavLink>
         </div>
       </nav>
 
@@ -38,6 +40,7 @@ function Layout() {
         <Routes>
           <Route path="/" element={<Translation />} />
           <Route path="/stories" element={<Stories />} />
+          <Route path="/songs" element={<Songs />} />
         </Routes>
       </div>
     </div>
