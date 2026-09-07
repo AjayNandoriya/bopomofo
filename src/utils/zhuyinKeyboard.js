@@ -173,6 +173,71 @@ export const VIRTUAL_KEYBOARD_LAYOUT = [
 ];
 
 /**
+ * Mobile touch-optimized Zhuyin keyboard layout (clean, thumb-friendly grid without PC modifier keys)
+ */
+export const MOBILE_KEYBOARD_LAYOUT = [
+    // Row 1 (11 keys)
+    [
+        { key: '1', label: 'ㄅ', sub: '1', zhuyin: 'ㄅ', type: 'initial' },
+        { key: '2', label: 'ㄉ', sub: '2', zhuyin: 'ㄉ', type: 'initial' },
+        { key: '3', label: 'ˇ', sub: '3', zhuyin: 'ˇ', type: 'tone' },
+        { key: '4', label: 'ˋ', sub: '4', zhuyin: 'ˋ', type: 'tone' },
+        { key: '5', label: 'ㄓ', sub: '5', zhuyin: 'ㄓ', type: 'initial' },
+        { key: '6', label: 'ˊ', sub: '6', zhuyin: 'ˊ', type: 'tone' },
+        { key: '7', label: '˙', sub: '7', zhuyin: '˙', type: 'tone' },
+        { key: '8', label: 'ㄚ', sub: '8', zhuyin: 'ㄚ', type: 'final' },
+        { key: '9', label: 'ㄞ', sub: '9', zhuyin: 'ㄞ', type: 'final' },
+        { key: '0', label: 'ㄢ', sub: '0', zhuyin: 'ㄢ', type: 'final' },
+        { key: '-', label: 'ㄦ', sub: '-', zhuyin: 'ㄦ', type: 'final' }
+    ],
+    // Row 2 (10 keys)
+    [
+        { key: 'q', label: 'ㄆ', sub: 'Q', zhuyin: 'ㄆ', type: 'initial' },
+        { key: 'w', label: 'ㄊ', sub: 'W', zhuyin: 'ㄊ', type: 'initial' },
+        { key: 'e', label: 'ㄍ', sub: 'E', zhuyin: 'ㄍ', type: 'initial' },
+        { key: 'r', label: 'ㄐ', sub: 'R', zhuyin: 'ㄐ', type: 'initial' },
+        { key: 't', label: 'ㄔ', sub: 'T', zhuyin: 'ㄔ', type: 'initial' },
+        { key: 'y', label: 'ㄗ', sub: 'Y', zhuyin: 'ㄗ', type: 'initial' },
+        { key: 'u', label: 'ㄧ', sub: 'U', zhuyin: 'ㄧ', type: 'medial' },
+        { key: 'i', label: 'ㄛ', sub: 'I', zhuyin: 'ㄛ', type: 'final' },
+        { key: 'o', label: 'ㄟ', sub: 'O', zhuyin: 'ㄟ', type: 'final' },
+        { key: 'p', label: 'ㄣ', sub: 'P', zhuyin: 'ㄣ', type: 'final' }
+    ],
+    // Row 3 (10 keys)
+    [
+        { key: 'a', label: 'ㄇ', sub: 'A', zhuyin: 'ㄇ', type: 'initial' },
+        { key: 's', label: 'ㄋ', sub: 'S', zhuyin: 'ㄋ', type: 'initial' },
+        { key: 'd', label: 'ㄎ', sub: 'D', zhuyin: 'ㄎ', type: 'initial' },
+        { key: 'f', label: 'ㄑ', sub: 'F', zhuyin: 'ㄑ', type: 'initial' },
+        { key: 'g', label: 'ㄕ', sub: 'G', zhuyin: 'ㄕ', type: 'initial' },
+        { key: 'h', label: 'ㄘ', sub: 'H', zhuyin: 'ㄘ', type: 'initial' },
+        { key: 'j', label: 'ㄨ', sub: 'J', zhuyin: 'ㄨ', type: 'medial' },
+        { key: 'k', label: 'ㄜ', sub: 'K', zhuyin: 'ㄜ', type: 'final' },
+        { key: 'l', label: 'ㄠ', sub: 'L', zhuyin: 'ㄠ', type: 'final' },
+        { key: ';', label: 'ㄤ', sub: ';', zhuyin: 'ㄤ', type: 'final' }
+    ],
+    // Row 4 (11 keys: 10 symbols + Backspace)
+    [
+        { key: 'z', label: 'ㄈ', sub: 'Z', zhuyin: 'ㄈ', type: 'initial' },
+        { key: 'x', label: 'ㄌ', sub: 'X', zhuyin: 'ㄌ', type: 'initial' },
+        { key: 'c', label: 'ㄏ', sub: 'C', zhuyin: 'ㄏ', type: 'initial' },
+        { key: 'v', label: 'ㄒ', sub: 'V', zhuyin: 'ㄒ', type: 'initial' },
+        { key: 'b', label: 'ㄖ', sub: 'B', zhuyin: 'ㄖ', type: 'initial' },
+        { key: 'n', label: 'ㄙ', sub: 'N', zhuyin: 'ㄙ', type: 'initial' },
+        { key: 'm', label: 'ㄩ', sub: 'M', zhuyin: 'ㄩ', type: 'medial' },
+        { key: ',', label: 'ㄝ', sub: ',', zhuyin: 'ㄝ', type: 'final' },
+        { key: '.', label: 'ㄡ', sub: '.', zhuyin: 'ㄡ', type: 'final' },
+        { key: '/', label: 'ㄥ', sub: '/', zhuyin: 'ㄥ', type: 'final' },
+        { key: 'Backspace', label: '⌫', sub: 'Del', width: 'flex-[1.4]', type: 'action' }
+    ],
+    // Row 5 (Spacebar / 1st tone)
+    [
+        { key: ' ', label: 'Space (一聲 / 1st Tone)', sub: '空白鍵', zhuyin: ' ', width: 'w-full max-w-sm', type: 'tone' }
+    ]
+];
+
+
+/**
  * Decomposes a target Zhuyin string into ordered components (symbols and tone)
  * Examples:
  * 'ㄏㄠˇ' -> { symbols: ['ㄏ', 'ㄠ'], tone: 'ˇ', expectedSequence: ['ㄏ', 'ㄠ', 'ˇ'] }

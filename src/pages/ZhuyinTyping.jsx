@@ -5,6 +5,7 @@ import {
     KEY_TO_ZHUYIN,
     ZHUYIN_TO_KEY,
     VIRTUAL_KEYBOARD_LAYOUT,
+    MOBILE_KEYBOARD_LAYOUT,
     decomposeZhuyin,
     evaluateZhuyinInput,
     soundEffects
@@ -15,6 +16,12 @@ function ZhuyinTyping() {
     const [selectedLevel, setSelectedLevel] = useState('A'); // 'A' | 'B' | 'C' | 'custom'
     const [activeParagraph, setActiveParagraph] = useState(null);
     const [customInputText, setCustomInputText] = useState('');
+
+    // Device / Mobile responsiveness state
+    const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+    const [keyboardLayoutMode, setKeyboardLayoutMode] = useState('auto'); // 'auto' | 'mobile' | 'desktop'
+    const [useNativeInput, setUseNativeInput] = useState(false);
+    const hiddenInputRef = useRef(null);
 
     // Prepared character stream for typing
     // Array of { char, zhuyin, pinyin, isPunctuation }
@@ -42,6 +49,15 @@ function ZhuyinTyping() {
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [activeKeyPressed, setActiveKeyPressed] = useState(null);
 
+    // Resize listener for mobile responsiveness
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     // Filtered paragraphs by level
     const currentParagraphs = useMemo(() => {
         return TOCFL_PARAGRAPHS.filter(p => p.level === selectedLevel);
@@ -66,6 +82,24 @@ function ZhuyinTyping() {
     useEffect(() => {
         soundEffects.enabled = soundEnabled;
     }, [soundEnabled]);
+
+    // Haptic feedback helper for mobile touch
+    const triggerHaptic = useCallback(() => {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            try {
+                navigator.vibrate(10);
+            } catch (e) {
+                // Ignore vibration errors
+            }
+        }
+    }, []);
+
+    // Active keyboard layout: mobile-optimized or desktop
+    const activeKeyboardLayout = useMemo(() => {
+        if (keyboardLayoutMode === 'mobile') return MOBILE_KEYBOARD_LAYOUT;
+        if (keyboardLayoutMode === 'desktop') return VIRTUAL_KEYBOARD_LAYOUT;
+        return isMobile ? MOBILE_KEYBOARD_LAYOUT : VIRTUAL_KEYBOARD_LAYOUT;
+    }, [keyboardLayoutMode, isMobile]);
 
     // Setup paragraph for practice
     const startPractice = useCallback(async (paragraphData, customText = null) => {
@@ -103,7 +137,12 @@ function ZhuyinTyping() {
         setTotalKeystrokes(0);
         setStreak(0);
         setMaxStreak(0);
-    }, []);
+
+        // If native input enabled, focus hidden input
+        if (useNativeInput && hiddenInputRef.current) {
+            hiddenInputRef.current.focus();
+        }
+    }, [useNativeInput]);
 
     // Helper to evaluate next key to highlight on virtual keyboard
     const nextKeyToPress = useMemo(() => {
@@ -138,8 +177,7 @@ function ZhuyinTyping() {
         setHasError(false);
 
         let nextIdx = updatedIndex + 1;
-        // Skip through consecutive whitespace or punctuation automatically if desired,
-        // or user can type them
+        // Skip through consecutive whitespace or punctuation automatically
         while (nextIdx < charStream.length && charStream[nextIdx].char === ' ') {
             nextIdx++;
         }
@@ -153,7 +191,7 @@ function ZhuyinTyping() {
         }
     }, [charStream]);
 
-    // Handle physical key or virtual key input
+    // Handle physical key, virtual key, or native mobile input
     const handleInput = useCallback((symbolOrKey, isRawKey = true) => {
         if (isFinished || !activeChar) return;
 
@@ -169,7 +207,7 @@ function ZhuyinTyping() {
         setTimeout(() => setActiveKeyPressed(null), 150);
 
         // Handle Backspace
-        if (symbolOrKey === 'Backspace') {
+        if (symbolOrKey === 'Backspace' || symbolOrKey === 'Del') {
             soundEffects.playKeypress();
             setInputBuffer(prev => prev.slice(0, -1));
             setHasError(false);
@@ -182,7 +220,6 @@ function ZhuyinTyping() {
             if (symbolOrKey === ' ' || symbolOrKey === 'Enter' || symbolOrKey === activeChar.char) {
                 advanceToNext(currentIndex, false);
             } else {
-                // Also auto-advance if user types next letter's zhuyin
                 advanceToNext(currentIndex, false);
             }
             return;
@@ -216,6 +253,13 @@ function ZhuyinTyping() {
             setInputBuffer(newInputBuffer);
         }
     }, [isFinished, activeChar, startTime, inputBuffer, currentIndex, advanceToNext]);
+
+    // Handle touch / click on virtual keys
+    const handleVirtualKeyPress = useCallback((e, key) => {
+        e.preventDefault();
+        triggerHaptic();
+        handleInput(key, true);
+    }, [triggerHaptic, handleInput]);
 
     // Listen to physical keyboard events
     useEffect(() => {
@@ -431,32 +475,70 @@ function ZhuyinTyping() {
     // Render Active Practice Arena
     return (
         <div className="h-full flex flex-col bg-neutral-100/70 overflow-hidden select-none">
+            {/* Hidden Input for Mobile Native Keyboard */}
+            <input
+                ref={hiddenInputRef}
+                type="text"
+                className="opacity-0 absolute -top-96 left-0 h-1 w-1 pointer-events-none"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck="false"
+                tabIndex={-1}
+                value=""
+                onChange={(e) => {
+                    const val = e.target.value;
+                    if (val) {
+                        for (const char of val) {
+                            handleInput(char, true);
+                        }
+                    }
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Backspace') {
+                        handleInput('Backspace', true);
+                    } else if (e.key === ' ' || e.code === 'Space') {
+                        handleInput(' ', true);
+                    } else if (e.key === 'Enter') {
+                        handleInput('Enter', true);
+                    }
+                }}
+            />
+
             {/* Top Navigation & Settings Bar */}
-            <header className="flex-none bg-white border-b border-neutral-200 px-4 md:px-6 py-2.5 flex items-center justify-between z-20 shadow-xs">
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => setActiveParagraph(null)}
-                        className="px-3 py-1.5 rounded-lg text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 flex items-center gap-1.5 transition cursor-pointer"
-                    >
-                        <span>←</span>
-                        <span>文章列表 (Back)</span>
-                    </button>
-                    <div className="h-4 w-px bg-neutral-200"></div>
-                    <div>
-                        <h2 className="text-base font-bold text-neutral-800 leading-tight">
-                            {activeParagraph.titleZh}
-                        </h2>
-                        <p className="text-xs text-neutral-400 hidden sm:block">
-                            {activeParagraph.title}
-                        </p>
+            <header className="flex-none bg-white border-b border-neutral-200 px-3 md:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 z-20 shadow-xs">
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setActiveParagraph(null)}
+                            className="px-2.5 py-1.5 rounded-lg text-xs md:text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 flex items-center gap-1 transition cursor-pointer"
+                        >
+                            <span>← 文章列表 (Back)</span>
+                        </button>
+                        <div className="h-4 w-px bg-neutral-200"></div>
+                        <div className="truncate max-w-[200px] sm:max-w-xs">
+                            <h2 className="text-sm md:text-base font-bold text-neutral-800 leading-tight truncate">
+                                {activeParagraph.titleZh}
+                            </h2>
+                            <p className="text-[11px] text-neutral-400 hidden sm:block truncate">
+                                {activeParagraph.title}
+                            </p>
+                        </div>
                     </div>
+
+                    <button
+                        onClick={() => startPractice(activeParagraph)}
+                        className="sm:hidden p-1.5 text-xs rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 border border-neutral-200 cursor-pointer shrink-0"
+                        title="Restart paragraph"
+                    >
+                        🔄
+                    </button>
                 </div>
 
-                {/* Controls */}
-                <div className="flex items-center gap-2">
+                {/* Controls (Scrollable on small mobile screens) */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1 no-scrollbar">
                     <button
                         onClick={() => setShowPinyin(p => !p)}
-                        className={`px-2.5 py-1 text-xs rounded-md font-medium transition border cursor-pointer ${showPinyin
+                        className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${showPinyin
                             ? 'bg-blue-50 text-blue-700 border-blue-200 font-bold'
                             : 'bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-50'
                             }`}
@@ -467,7 +549,7 @@ function ZhuyinTyping() {
 
                     <button
                         onClick={() => setShowZhuyin(z => !z)}
-                        className={`px-2.5 py-1 text-xs rounded-md font-medium transition border cursor-pointer ${showZhuyin
+                        className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${showZhuyin
                             ? 'bg-blue-50 text-blue-700 border-blue-200 font-bold'
                             : 'bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-50'
                             }`}
@@ -478,18 +560,18 @@ function ZhuyinTyping() {
 
                     <button
                         onClick={() => setEnableKeyGuide(g => !g)}
-                        className={`px-2.5 py-1 text-xs rounded-md font-medium transition border cursor-pointer ${enableKeyGuide
+                        className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${enableKeyGuide
                             ? 'bg-amber-50 text-amber-700 border-amber-300 font-bold'
                             : 'bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-50'
                             }`}
                         title="Highlight next key on virtual keyboard"
                     >
-                        💡 按鍵導引 (Guide)
+                        💡 導引
                     </button>
 
                     <button
                         onClick={() => setSoundEnabled(s => !s)}
-                        className={`p-1.5 text-xs rounded-md transition border cursor-pointer ${soundEnabled
+                        className={`p-1.5 text-xs rounded-md transition border cursor-pointer shrink-0 ${soundEnabled
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : 'bg-white text-neutral-400 border-neutral-200'
                             }`}
@@ -499,8 +581,25 @@ function ZhuyinTyping() {
                     </button>
 
                     <button
+                        onClick={() => {
+                            const nextVal = !useNativeInput;
+                            setUseNativeInput(nextVal);
+                            if (nextVal && hiddenInputRef.current) {
+                                hiddenInputRef.current.focus();
+                            }
+                        }}
+                        className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${useNativeInput
+                            ? 'bg-purple-50 text-purple-700 border-purple-300 font-bold'
+                            : 'bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-50'
+                            }`}
+                        title="Use Mobile Phone Built-in Keyboard"
+                    >
+                        {useNativeInput ? '⌨️ 手機輸入法' : '📱 螢幕鍵盤'}
+                    </button>
+
+                    <button
                         onClick={() => setShowKeyboard(k => !k)}
-                        className={`px-2.5 py-1 text-xs rounded-md font-medium transition border cursor-pointer ${showKeyboard
+                        className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${showKeyboard
                             ? 'bg-neutral-900 text-white border-neutral-900'
                             : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
                             }`}
@@ -510,7 +609,7 @@ function ZhuyinTyping() {
 
                     <button
                         onClick={() => startPractice(activeParagraph)}
-                        className="p-1.5 text-xs rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 border border-neutral-200 cursor-pointer"
+                        className="hidden sm:block p-1.5 text-xs rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 border border-neutral-200 cursor-pointer shrink-0"
                         title="Restart paragraph"
                     >
                         🔄
@@ -519,42 +618,41 @@ function ZhuyinTyping() {
             </header>
 
             {/* Performance Stats HUD Bar */}
-            <div className="flex-none bg-neutral-900 text-white px-6 py-2.5 flex items-center justify-between shadow-inner">
-                <div className="flex items-center gap-6 text-sm">
-                    <div className="flex items-baseline gap-1.5">
-                        <span className="text-neutral-400 text-xs font-semibold">CPM:</span>
-                        <span className="text-xl font-mono font-bold text-amber-400">{cpm}</span>
-                        <span className="text-[11px] text-neutral-400">字/分</span>
+            <div className="flex-none bg-neutral-900 text-white px-3 md:px-6 py-2 flex items-center justify-between shadow-inner">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs md:text-sm">
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-neutral-400 text-[11px] font-semibold">CPM:</span>
+                        <span className="text-base md:text-xl font-mono font-bold text-amber-400">{cpm}</span>
                     </div>
 
-                    <div className="flex items-baseline gap-1.5">
-                        <span className="text-neutral-400 text-xs font-semibold">WPM:</span>
-                        <span className="text-lg font-mono font-bold text-white">{wpm}</span>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-neutral-400 text-[11px] font-semibold">WPM:</span>
+                        <span className="text-sm md:text-lg font-mono font-bold text-white">{wpm}</span>
                     </div>
 
-                    <div className="flex items-baseline gap-1.5">
-                        <span className="text-neutral-400 text-xs font-semibold">準確率:</span>
-                        <span className={`text-lg font-mono font-bold ${accuracy >= 90 ? 'text-emerald-400' : accuracy >= 75 ? 'text-yellow-400' : 'text-rose-400'}`}>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-neutral-400 text-[11px] font-semibold">準確率:</span>
+                        <span className={`text-sm md:text-lg font-mono font-bold ${accuracy >= 90 ? 'text-emerald-400' : accuracy >= 75 ? 'text-yellow-400' : 'text-rose-400'}`}>
                             {accuracy}%
                         </span>
                     </div>
 
-                    <div className="flex items-baseline gap-1.5">
-                        <span className="text-neutral-400 text-xs font-semibold">進度:</span>
-                        <span className="text-sm font-mono text-neutral-200">
-                            {currentIndex} / {charStream.length}
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-neutral-400 text-[11px] font-semibold">進度:</span>
+                        <span className="text-xs md:text-sm font-mono text-neutral-200">
+                            {currentIndex}/{charStream.length}
                         </span>
                     </div>
 
                     {streak > 2 && (
-                        <div className="hidden sm:flex items-center gap-1 text-xs text-orange-400 bg-orange-950/60 px-2.5 py-0.5 rounded-full border border-orange-700/50">
-                            <span>🔥 連續正確 {streak}</span>
+                        <div className="hidden xs:flex items-center gap-1 text-[11px] text-orange-400 bg-orange-950/60 px-2 py-0.5 rounded-full border border-orange-700/50">
+                            <span>🔥 {streak}</span>
                         </div>
                     )}
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="text-sm font-mono text-neutral-300">
+                <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-xs md:text-sm font-mono text-neutral-300">
                         ⏱️ {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, '0')}
                     </div>
                 </div>
@@ -569,32 +667,32 @@ function ZhuyinTyping() {
             </div>
 
             {/* Main Reading & Practice Area */}
-            <div className="flex-1 flex flex-col overflow-hidden p-4 md:p-6">
+            <div className="flex-1 flex flex-col overflow-hidden p-2 sm:p-4 md:p-6">
                 {/* Active Target Character Hint Overlay */}
                 {activeTargetInfo && (
-                    <div className="flex-none mb-3 bg-white border border-neutral-200/90 rounded-xl px-4 py-2.5 shadow-sm flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">
-                                當前目標字 (Current Target):
+                    <div className="flex-none mb-2 bg-white border border-neutral-200/90 rounded-xl px-3 py-2 shadow-xs flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 md:gap-3">
+                            <span className="text-[11px] md:text-xs font-bold uppercase tracking-wider text-neutral-400">
+                                當前目標字:
                             </span>
-                            <span className="text-2xl font-serif font-bold text-neutral-900">
+                            <span className="text-xl md:text-2xl font-serif font-bold text-neutral-900">
                                 {activeChar.char}
                             </span>
-                            <span className="text-sm font-mono font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                            <span className="text-xs md:text-sm font-mono font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
                                 注音: {activeTargetInfo.zhuyin}
                             </span>
                             {showPinyin && (
-                                <span className="text-xs font-mono text-neutral-500">
-                                    拼音: {activeTargetInfo.pinyin}
+                                <span className="text-[11px] font-mono text-neutral-500 hidden sm:inline">
+                                    {activeTargetInfo.pinyin}
                                 </span>
                             )}
                         </div>
 
                         {/* Input buffer display & Next key prompt */}
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
                                 <span className="text-xs text-neutral-500">已輸入:</span>
-                                <span className={`px-2 py-0.5 rounded font-mono text-sm font-bold min-w-[3rem] text-center ${hasError
+                                <span className={`px-2 py-0.5 rounded font-mono text-xs md:text-sm font-bold min-w-[2.5rem] text-center ${hasError
                                     ? 'bg-rose-100 text-rose-700 border border-rose-300 animate-pulse'
                                     : 'bg-neutral-100 text-neutral-800 border border-neutral-200'
                                     }`}>
@@ -603,9 +701,9 @@ function ZhuyinTyping() {
                             </div>
 
                             {enableKeyGuide && activeTargetInfo.nextKey && (
-                                <div className="hidden sm:flex items-center gap-1 text-xs bg-amber-50 text-amber-800 px-2.5 py-1 rounded-md border border-amber-200">
-                                    <span>請按鍵盤:</span>
-                                    <kbd className="px-1.5 py-0.5 bg-white border border-amber-300 rounded font-mono font-bold text-amber-900 shadow-xs">
+                                <div className="flex items-center gap-1 text-[11px] bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md border border-amber-200">
+                                    <span>按:</span>
+                                    <kbd className="px-1 py-0.2 bg-white border border-amber-300 rounded font-mono font-bold text-amber-900">
                                         {activeTargetInfo.nextKey.toUpperCase()}
                                     </kbd>
                                 </div>
@@ -615,12 +713,18 @@ function ZhuyinTyping() {
                 )}
 
                 {/* Reading & Characters Flow Box */}
-                <div className="flex-1 bg-white rounded-2xl border border-neutral-200 shadow-sm p-6 overflow-y-auto relative">
-                    <div className="flex flex-wrap gap-x-3 gap-y-4 items-center leading-loose">
+                <div
+                    onClick={() => {
+                        if (useNativeInput && hiddenInputRef.current) {
+                            hiddenInputRef.current.focus();
+                        }
+                    }}
+                    className="flex-1 bg-white rounded-xl md:rounded-2xl border border-neutral-200 shadow-xs p-3 md:p-6 overflow-y-auto relative cursor-text"
+                >
+                    <div className="flex flex-wrap gap-x-2 md:gap-x-3 gap-y-3 md:gap-y-4 items-center leading-loose">
                         {charStream.map((item, idx) => {
                             const isCompleted = idx < currentIndex;
                             const isCurrent = idx === currentIndex;
-                            const isPending = idx > currentIndex;
 
                             if (item.char === '\n') {
                                 return <div key={idx} className="basis-full h-2" />;
@@ -629,15 +733,15 @@ function ZhuyinTyping() {
                             return (
                                 <div
                                     key={idx}
-                                    className={`relative flex flex-col items-center justify-center p-1.5 rounded-lg transition-all ${isCurrent
-                                        ? 'bg-blue-50 ring-2 ring-blue-500 shadow-md scale-105 z-10'
+                                    className={`relative flex flex-col items-center justify-center p-1 md:p-1.5 rounded-lg transition-all ${isCurrent
+                                        ? 'bg-blue-50 ring-2 ring-blue-500 shadow-sm scale-105 z-10'
                                         : isCompleted
                                             ? 'bg-emerald-50/60 text-emerald-900'
                                             : 'text-neutral-800 hover:bg-neutral-50'
                                         }`}
                                 >
                                     {/* Pinyin (Top) */}
-                                    <div className={`h-4 flex items-end justify-center text-[11px] font-mono leading-none ${showPinyin && !item.isPunctuation
+                                    <div className={`h-3.5 flex items-end justify-center text-[10px] md:text-[11px] font-mono leading-none ${showPinyin && !item.isPunctuation
                                         ? isCompleted ? 'text-emerald-600' : isCurrent ? 'text-blue-600 font-bold' : 'text-neutral-400'
                                         : 'invisible'
                                         }`}>
@@ -645,8 +749,8 @@ function ZhuyinTyping() {
                                     </div>
 
                                     {/* Character + Zhuyin annotation */}
-                                    <div className="flex items-center gap-1">
-                                        <span className={`text-2xl md:text-3xl font-serif leading-none ${isCompleted
+                                    <div className="flex items-center gap-0.5 md:gap-1">
+                                        <span className={`text-xl md:text-3xl font-serif leading-none ${isCompleted
                                             ? 'text-emerald-700 font-bold'
                                             : isCurrent
                                                 ? 'text-neutral-900 font-bold'
@@ -657,14 +761,14 @@ function ZhuyinTyping() {
 
                                         {/* Zhuyin (Vertical Right) */}
                                         {showZhuyin && !item.isPunctuation && item.zhuyin && (
-                                            <div className={`flex flex-col text-[10px] items-center justify-center font-mono leading-tight ${isCompleted
+                                            <div className={`flex flex-col text-[9px] md:text-[10px] items-center justify-center font-mono leading-tight ${isCompleted
                                                 ? 'text-emerald-600 font-medium'
                                                 : isCurrent
                                                     ? 'text-blue-700 font-bold'
                                                     : 'text-neutral-400'
                                                 }`}>
                                                 {item.zhuyin.split('').map((z, zi) => (
-                                                    <span key={zi} className="block transform scale-110 origin-center">{z}</span>
+                                                    <span key={zi} className="block transform scale-105 origin-center">{z}</span>
                                                 ))}
                                             </div>
                                         )}
@@ -672,7 +776,7 @@ function ZhuyinTyping() {
 
                                     {/* Active cursor bottom dot */}
                                     {isCurrent && (
-                                        <div className="absolute -bottom-1 w-2 h-2 rounded-full bg-blue-500 animate-ping"></div>
+                                        <div className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></div>
                                     )}
                                 </div>
                             );
@@ -680,31 +784,44 @@ function ZhuyinTyping() {
                     </div>
                 </div>
 
-                {/* Virtual Keyboard (Collapsible) */}
+                {/* Virtual Keyboard (Touch & Mobile Optimized, Collapsible) */}
                 {showKeyboard && (
-                    <div className="flex-none mt-3 bg-neutral-900 text-neutral-200 p-3 rounded-2xl shadow-lg border border-neutral-800">
-                        {/* Keyboard Header / Category Legend */}
-                        <div className="flex items-center justify-between text-[11px] text-neutral-400 mb-2 px-2">
-                            <span className="font-semibold text-neutral-300">台灣標準注音鍵盤 (Standard Dai Chien Layout)</span>
-                            <div className="flex items-center gap-3">
+                    <div className="flex-none mt-2 bg-neutral-900 text-neutral-200 p-2 sm:p-3 rounded-xl md:rounded-2xl shadow-lg border border-neutral-800 touch-manipulation select-none">
+                        {/* Keyboard Header & Layout Switcher */}
+                        <div className="flex items-center justify-between text-[10px] md:text-[11px] text-neutral-400 mb-1.5 px-1">
+                            <div className="flex items-center gap-2">
+                                <span className="font-semibold text-neutral-300">
+                                    台灣標準注音鍵盤 {isMobile ? '(手機版)' : ''}
+                                </span>
+                                {isMobile && (
+                                    <button
+                                        onClick={() => setKeyboardLayoutMode(m => (m === 'desktop' ? 'mobile' : 'desktop'))}
+                                        className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-700 hover:bg-neutral-700 cursor-pointer"
+                                    >
+                                        切換: {keyboardLayoutMode === 'desktop' ? '💻 電腦' : '📱 簡潔'}
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="hidden sm:flex items-center gap-3">
                                 <span className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-indigo-400"></span> 聲母 (Initials)
+                                    <span className="w-2 h-2 rounded-full bg-indigo-400"></span> 聲母
                                 </span>
                                 <span className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-amber-400"></span> 介音 (Medials)
+                                    <span className="w-2 h-2 rounded-full bg-amber-400"></span> 介音
                                 </span>
                                 <span className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span> 韻母 (Finals)
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span> 韻母
                                 </span>
                                 <span className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-rose-400"></span> 聲調 (Tones)
+                                    <span className="w-2 h-2 rounded-full bg-rose-400"></span> 聲調
                                 </span>
                             </div>
                         </div>
 
                         {/* Keyboard Rows */}
-                        <div className="flex flex-col gap-1.5 items-center">
-                            {VIRTUAL_KEYBOARD_LAYOUT.map((row, rowIdx) => (
+                        <div className="flex flex-col gap-1 items-center w-full">
+                            {activeKeyboardLayout.map((row, rowIdx) => (
                                 <div key={rowIdx} className="flex gap-1 justify-center w-full">
                                     {row.map((k, kIdx) => {
                                         const isNextRecommended = enableKeyGuide && nextKeyToPress && (
@@ -719,17 +836,17 @@ function ZhuyinTyping() {
                                         );
 
                                         // Key type colors
-                                        let bgClass = 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700';
+                                        let bgClass = 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700 active:bg-neutral-600';
                                         let borderClass = 'border-neutral-700';
 
                                         if (k.type === 'initial') {
-                                            bgClass = 'bg-neutral-800 text-indigo-200 hover:bg-indigo-950/70';
+                                            bgClass = 'bg-neutral-800 text-indigo-200 hover:bg-indigo-950/70 active:bg-indigo-900';
                                         } else if (k.type === 'medial') {
-                                            bgClass = 'bg-neutral-800 text-amber-200 hover:bg-amber-950/70';
+                                            bgClass = 'bg-neutral-800 text-amber-200 hover:bg-amber-950/70 active:bg-amber-900';
                                         } else if (k.type === 'final') {
-                                            bgClass = 'bg-neutral-800 text-emerald-200 hover:bg-emerald-950/70';
+                                            bgClass = 'bg-neutral-800 text-emerald-200 hover:bg-emerald-950/70 active:bg-emerald-900';
                                         } else if (k.type === 'tone') {
-                                            bgClass = 'bg-neutral-800 text-rose-200 hover:bg-rose-950/70';
+                                            bgClass = 'bg-neutral-800 text-rose-200 hover:bg-rose-950/70 active:bg-rose-900';
                                         }
 
                                         if (isNextRecommended) {
@@ -742,13 +859,16 @@ function ZhuyinTyping() {
                                         return (
                                             <button
                                                 key={kIdx}
-                                                onClick={() => handleInput(k.key, true)}
-                                                className={`h-9 md:h-10 ${k.width || 'flex-1 min-w-[2rem] md:min-w-[2.5rem]'} px-1 rounded-lg border ${borderClass} ${bgClass} transition-all duration-75 flex flex-col items-center justify-center cursor-pointer shadow-xs`}
+                                                type="button"
+                                                onPointerDown={(e) => handleVirtualKeyPress(e, k.key)}
+                                                className={`h-11 sm:h-10 ${k.width || 'flex-1 min-w-[1.7rem] sm:min-w-[2.2rem]'} px-0.5 sm:px-1 rounded-md sm:rounded-lg border ${borderClass} ${bgClass} transition-all duration-75 flex flex-col items-center justify-center cursor-pointer shadow-xs active:scale-95 touch-manipulation`}
                                             >
-                                                <div className="flex items-center justify-between w-full px-1 text-[9px] md:text-[10px] text-neutral-400">
-                                                    <span>{k.label}</span>
-                                                    {k.sub && (
-                                                        <span className={`font-bold ${isNextRecommended ? 'text-black' : 'text-neutral-200'}`}>
+                                                <div className="flex flex-col items-center justify-center w-full leading-none">
+                                                    <span className={`text-sm sm:text-base font-bold ${isNextRecommended ? 'text-black' : ''}`}>
+                                                        {k.label}
+                                                    </span>
+                                                    {k.sub && k.sub !== k.label && (
+                                                        <span className={`text-[8px] sm:text-[9px] mt-0.5 opacity-60 ${isNextRecommended ? 'text-neutral-900 font-bold' : 'text-neutral-400'}`}>
                                                             {k.sub}
                                                         </span>
                                                     )}

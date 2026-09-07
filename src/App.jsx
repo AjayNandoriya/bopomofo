@@ -11,7 +11,7 @@ function NavLink({ to, children }) {
   return (
     <Link
       to={to}
-      className={`px-4 py-2 rounded-md transition-colors font-medium ${isActive
+      className={`px-3 py-1.5 md:px-4 md:py-2 rounded-md transition-colors text-xs md:text-sm font-medium whitespace-nowrap ${isActive
         ? 'bg-neutral-900 text-white'
         : 'text-neutral-600 hover:bg-neutral-100'
         }`}
@@ -23,13 +23,13 @@ function NavLink({ to, children }) {
 
 function Layout() {
   return (
-    <div className="h-screen w-screen bg-neutral-50 flex flex-col overflow-hidden">
+    <div className="h-[100dvh] w-full bg-neutral-50 flex flex-col overflow-hidden">
       {/* Main Navigation */}
-      <nav className="flex-none bg-white border-b border-neutral-200 px-6 py-3 flex items-center gap-6 z-20 shadow-sm">
-        <div className="font-bold text-xl text-neutral-800 tracking-tight mr-4">
+      <nav className="flex-none bg-white border-b border-neutral-200 px-3 md:px-6 py-2 md:py-3 flex items-center justify-between md:justify-start gap-2 md:gap-6 z-20 shadow-xs overflow-x-auto">
+        <div className="font-bold text-lg md:text-xl text-neutral-800 tracking-tight shrink-0 mr-1 md:mr-4">
           Bopomofo App
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 md:gap-2 shrink-0">
           <NavLink to="/">Translation</NavLink>
           <NavLink to="/stories">Stories</NavLink>
           <NavLink to="/songs">Songs</NavLink>
