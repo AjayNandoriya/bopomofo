@@ -20,8 +20,8 @@ function ZhuyinTyping() {
     // Device / Mobile responsiveness state
     const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     const [keyboardLayoutMode, setKeyboardLayoutMode] = useState('auto'); // 'auto' | 'mobile' | 'desktop'
-    const [useNativeInput, setUseNativeInput] = useState(false);
     const hiddenInputRef = useRef(null);
+    const isComposingRef = useRef(false);
 
     // Prepared character stream for typing
     // Array of { char, zhuyin, pinyin, isPunctuation }
@@ -44,7 +44,7 @@ function ZhuyinTyping() {
     // Visual / Helper settings
     const [showPinyin, setShowPinyin] = useState(false);
     const [showZhuyin, setShowZhuyin] = useState(true);
-    const [showKeyboard, setShowKeyboard] = useState(true);
+    const [showKeyboard, setShowKeyboard] = useState(!isMobile);
     const [enableKeyGuide, setEnableKeyGuide] = useState(true);
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [activeKeyPressed, setActiveKeyPressed] = useState(null);
@@ -138,11 +138,13 @@ function ZhuyinTyping() {
         setStreak(0);
         setMaxStreak(0);
 
-        // If native input enabled, focus hidden input
-        if (useNativeInput && hiddenInputRef.current) {
-            hiddenInputRef.current.focus();
-        }
-    }, [useNativeInput]);
+        // Focus hidden input for mobile/desktop direct typing
+        setTimeout(() => {
+            if (hiddenInputRef.current) {
+                hiddenInputRef.current.focus();
+            }
+        }, 50);
+    }, []);
 
     // Helper to evaluate next key to highlight on virtual keyboard
     const nextKeyToPress = useMemo(() => {
@@ -191,16 +193,137 @@ function ZhuyinTyping() {
         }
     }, [charStream]);
 
-    // Handle physical key, virtual key, or native mobile input
-    const handleInput = useCallback((symbolOrKey, isRawKey = true) => {
-        if (isFinished || !activeChar) return;
+    // Core input processing: handles direct Chinese characters, Zhuyin symbols, punctuation, and multi-char strings
+    const processInputText = useCallback((text) => {
+        if (!text || isFinished || !charStream.length) return;
 
-        // Initialize timer on first keypress
+        // Initialize timer on first input
         if (!startTime) {
             setStartTime(Date.now());
         }
 
-        setTotalKeystrokes(prev => prev + 1);
+        let currIdx = currentIndex;
+        let currBuffer = inputBuffer;
+
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            if (currIdx >= charStream.length) break;
+            const target = charStream[currIdx];
+
+            setTotalKeystrokes(prev => prev + 1);
+
+            // 1. Direct character match (Chinese character or identical symbol)
+            if (char === target.char) {
+                soundEffects.playCharSuccess();
+                setCorrectCount(prev => prev + 1);
+                setStreak(prev => {
+                    const next = prev + 1;
+                    setMaxStreak(m => Math.max(m, next));
+                    return next;
+                });
+                currBuffer = '';
+                setHasError(false);
+                currIdx++;
+                while (currIdx < charStream.length && charStream[currIdx].char === ' ') {
+                    currIdx++;
+                }
+                continue;
+            }
+
+            // 2. Target is punctuation or newline
+            if (target.isPunctuation) {
+                const isPuncMatch = (
+                    char === target.char ||
+                    char === ' ' ||
+                    char === '\n' ||
+                    char === 'Enter' ||
+                    (target.char === '，' && char === ',') ||
+                    (target.char === '。' && char === '.') ||
+                    (target.char === '！' && char === '!') ||
+                    (target.char === '？' && char === '?') ||
+                    (target.char === '：' && char === ':') ||
+                    (target.char === '；' && char === ';') ||
+                    (target.char === '「' && (char === '"' || char === "'")) ||
+                    (target.char === '」' && (char === '"' || char === "'")) ||
+                    (target.char === '（' && char === '(') ||
+                    (target.char === '）' && char === ')')
+                );
+
+                if (isPuncMatch) {
+                    soundEffects.playCharSuccess();
+                    currBuffer = '';
+                    setHasError(false);
+                    currIdx++;
+                    while (currIdx < charStream.length && charStream[currIdx].char === ' ') {
+                        currIdx++;
+                    }
+                } else {
+                    soundEffects.playError();
+                    setHasError(true);
+                    setStreak(0);
+                    currBuffer = char;
+                }
+                continue;
+            }
+
+            // 3. If user typed a Chinese character that does NOT match target
+            const isChineseChar = /[\u4e00-\u9fa5]/.test(char);
+            if (isChineseChar) {
+                soundEffects.playError();
+                setHasError(true);
+                setStreak(0);
+                currBuffer = char;
+                continue;
+            }
+
+            // 4. Zhuyin symbol or mapped key
+            let zhuyinInputChar = char;
+            if (KEY_TO_ZHUYIN[char]) {
+                zhuyinInputChar = KEY_TO_ZHUYIN[char];
+            }
+
+            soundEffects.playKeypress();
+            const newInputBuffer = currBuffer + zhuyinInputChar;
+            const evalResult = evaluateZhuyinInput(newInputBuffer, target.zhuyin);
+
+            if (evalResult.matched) {
+                soundEffects.playCharSuccess();
+                setCorrectCount(prev => prev + 1);
+                setStreak(prev => {
+                    const next = prev + 1;
+                    setMaxStreak(m => Math.max(m, next));
+                    return next;
+                });
+                currBuffer = '';
+                setHasError(false);
+                currIdx++;
+                while (currIdx < charStream.length && charStream[currIdx].char === ' ') {
+                    currIdx++;
+                }
+            } else if (evalResult.isPrefix) {
+                currBuffer = newInputBuffer;
+                setHasError(false);
+            } else {
+                soundEffects.playError();
+                setHasError(true);
+                setStreak(0);
+                currBuffer = newInputBuffer;
+            }
+        }
+
+        setInputBuffer(currBuffer);
+        if (currIdx >= charStream.length) {
+            setIsFinished(true);
+            soundEffects.playComplete();
+            setCurrentIndex(charStream.length);
+        } else {
+            setCurrentIndex(currIdx);
+        }
+    }, [isFinished, charStream, startTime, currentIndex, inputBuffer]);
+
+    // Handle physical key, virtual key, or backspace
+    const handleInput = useCallback((symbolOrKey) => {
+        if (isFinished || !activeChar) return;
 
         // Animate key visual
         setActiveKeyPressed(symbolOrKey);
@@ -214,51 +337,14 @@ function ZhuyinTyping() {
             return;
         }
 
-        // If current character is punctuation or newline
-        if (activeChar.isPunctuation) {
-            // Any spacebar, enter, or exact punctuation matches
-            if (symbolOrKey === ' ' || symbolOrKey === 'Enter' || symbolOrKey === activeChar.char) {
-                advanceToNext(currentIndex, false);
-            } else {
-                advanceToNext(currentIndex, false);
-            }
-            return;
-        }
-
-        // Convert key to Zhuyin symbol if needed
-        let zhuyinInputChar = symbolOrKey;
-        if (isRawKey) {
-            if (KEY_TO_ZHUYIN[symbolOrKey]) {
-                zhuyinInputChar = KEY_TO_ZHUYIN[symbolOrKey];
-            }
-        }
-
-        soundEffects.playKeypress();
-
-        const newInputBuffer = inputBuffer + zhuyinInputChar;
-        const evalResult = evaluateZhuyinInput(newInputBuffer, activeChar.zhuyin);
-
-        if (evalResult.matched) {
-            // Syllable complete & matched!
-            advanceToNext(currentIndex, true);
-        } else if (evalResult.isPrefix) {
-            // Valid prefix, keep accumulating
-            setInputBuffer(newInputBuffer);
-            setHasError(false);
-        } else {
-            // Incorrect symbol entered
-            soundEffects.playError();
-            setHasError(true);
-            setStreak(0);
-            setInputBuffer(newInputBuffer);
-        }
-    }, [isFinished, activeChar, startTime, inputBuffer, currentIndex, advanceToNext]);
+        processInputText(symbolOrKey);
+    }, [isFinished, activeChar, processInputText]);
 
     // Handle touch / click on virtual keys
     const handleVirtualKeyPress = useCallback((e, key) => {
         e.preventDefault();
         triggerHaptic();
-        handleInput(key, true);
+        handleInput(key);
     }, [triggerHaptic, handleInput]);
 
     // Listen to physical keyboard events
@@ -269,28 +355,31 @@ function ZhuyinTyping() {
             // Ignore browser shortcuts with Meta or Ctrl
             if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+            // If focused on hidden input, let the input events handle it
+            if (e.target === hiddenInputRef.current) return;
+
             // Prevent scroll on spacebar
             if (e.key === ' ' || e.code === 'Space') {
                 e.preventDefault();
-                handleInput(' ', true);
+                handleInput(' ');
                 return;
             }
 
             if (e.key === 'Backspace') {
                 e.preventDefault();
-                handleInput('Backspace', true);
+                handleInput('Backspace');
                 return;
             }
 
             if (e.key === 'Enter') {
                 e.preventDefault();
-                handleInput('Enter', true);
+                handleInput('Enter');
                 return;
             }
 
             // Normal key
             if (e.key && e.key.length === 1) {
-                handleInput(e.key, true);
+                handleInput(e.key);
             }
         };
 
@@ -475,31 +564,60 @@ function ZhuyinTyping() {
     // Render Active Practice Arena
     return (
         <div className="h-full flex flex-col bg-neutral-100/70 overflow-hidden select-none">
-            {/* Hidden Input for Mobile Native Keyboard */}
+            {/* Native Input for Direct Keyboard & IME Support */}
             <input
                 ref={hiddenInputRef}
                 type="text"
-                className="opacity-0 absolute -top-96 left-0 h-1 w-1 pointer-events-none"
+                className="opacity-0 absolute top-0 left-0 w-8 h-8 pointer-events-none -z-10"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck="false"
                 tabIndex={-1}
-                value=""
-                onChange={(e) => {
+                onCompositionStart={() => {
+                    isComposingRef.current = true;
+                }}
+                onCompositionUpdate={(e) => {
+                    if (e.data) {
+                        setInputBuffer(e.data);
+                    }
+                }}
+                onCompositionEnd={(e) => {
+                    isComposingRef.current = false;
+                    const text = e.data || e.target.value;
+                    if (text) {
+                        processInputText(text);
+                    }
+                    e.target.value = '';
+                }}
+                onInput={(e) => {
+                    if (isComposingRef.current) return;
                     const val = e.target.value;
                     if (val) {
-                        for (const char of val) {
-                            handleInput(char, true);
-                        }
+                        processInputText(val);
+                        e.target.value = '';
+                    }
+                }}
+                onChange={(e) => {
+                    if (isComposingRef.current) return;
+                    const val = e.target.value;
+                    if (val) {
+                        processInputText(val);
+                        e.target.value = '';
                     }
                 }}
                 onKeyDown={(e) => {
                     if (e.key === 'Backspace') {
-                        handleInput('Backspace', true);
-                    } else if (e.key === ' ' || e.code === 'Space') {
-                        handleInput(' ', true);
+                        if (inputBuffer.length > 0 || hasError) {
+                            e.preventDefault();
+                            soundEffects.playKeypress();
+                            setInputBuffer(prev => prev.slice(0, -1));
+                            setHasError(false);
+                        }
                     } else if (e.key === 'Enter') {
-                        handleInput('Enter', true);
+                        if (activeChar && activeChar.isPunctuation) {
+                            e.preventDefault();
+                            processInputText('\n');
+                        }
                     }
                 }}
             />
@@ -580,32 +698,25 @@ function ZhuyinTyping() {
                         {soundEnabled ? '🔊' : '🔇'}
                     </button>
 
-                    <button
-                        onClick={() => {
-                            const nextVal = !useNativeInput;
-                            setUseNativeInput(nextVal);
-                            if (nextVal && hiddenInputRef.current) {
-                                hiddenInputRef.current.focus();
-                            }
-                        }}
-                        className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${useNativeInput
-                            ? 'bg-purple-50 text-purple-700 border-purple-300 font-bold'
-                            : 'bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-50'
-                            }`}
-                        title="Use Mobile Phone Built-in Keyboard"
-                    >
-                        {useNativeInput ? '⌨️ 手機輸入法' : '📱 螢幕鍵盤'}
-                    </button>
+                    {/* Desktop virtual keyboard toggle */}
+                    {!isMobile && (
+                        <button
+                            onClick={() => setShowKeyboard(k => !k)}
+                            className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${showKeyboard
+                                ? 'bg-neutral-900 text-white border-neutral-900'
+                                : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
+                                }`}
+                        >
+                            ⌨️ 鍵盤 ({showKeyboard ? '收合' : '展開'})
+                        </button>
+                    )}
 
-                    <button
-                        onClick={() => setShowKeyboard(k => !k)}
-                        className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${showKeyboard
-                            ? 'bg-neutral-900 text-white border-neutral-900'
-                            : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
-                            }`}
-                    >
-                        ⌨️ 鍵盤 ({showKeyboard ? '收合' : '展開'})
-                    </button>
+                    {/* Mobile mode status indicator */}
+                    {isMobile && (
+                        <div className="px-2 py-1 text-xs rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-medium whitespace-nowrap shrink-0 flex items-center gap-1">
+                            <span>📱 手機注音模式</span>
+                        </div>
+                    )}
 
                     <button
                         onClick={() => startPractice(activeParagraph)}
@@ -715,9 +826,7 @@ function ZhuyinTyping() {
                 {/* Reading & Characters Flow Box */}
                 <div
                     onClick={() => {
-                        if (useNativeInput && hiddenInputRef.current) {
-                            hiddenInputRef.current.focus();
-                        }
+                        hiddenInputRef.current?.focus();
                     }}
                     className="flex-1 bg-white rounded-xl md:rounded-2xl border border-neutral-200 shadow-xs p-3 md:p-6 overflow-y-auto relative cursor-text"
                 >
@@ -784,8 +893,31 @@ function ZhuyinTyping() {
                     </div>
                 </div>
 
-                {/* Virtual Keyboard (Touch & Mobile Optimized, Collapsible) */}
-                {showKeyboard && (
+                {/* Mobile direct input guide banner */}
+                {isMobile && (
+                    <div
+                        onClick={() => hiddenInputRef.current?.focus()}
+                        className="flex-none mt-2 p-3 bg-white rounded-xl border border-purple-100 shadow-xs flex items-center justify-between cursor-pointer active:bg-purple-50/70 transition"
+                    >
+                        <div className="flex items-center gap-2.5">
+                            <span className="text-xl">📱</span>
+                            <div className="text-left">
+                                <div className="text-xs font-bold text-neutral-800">
+                                    手機注音鍵盤直接輸入模式
+                                </div>
+                                <div className="text-[11px] text-neutral-500">
+                                    點擊此處或上方文章開啟鍵盤，直接輸入漢字或注音
+                                </div>
+                            </div>
+                        </div>
+                        <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200 pointer-events-none shrink-0">
+                            開啟鍵盤
+                        </span>
+                    </div>
+                )}
+
+                {/* Virtual Keyboard (Only shown on Desktop, Collapsible) */}
+                {!isMobile && showKeyboard && (
                     <div className="flex-none mt-2 bg-neutral-900 text-neutral-200 p-2 sm:p-3 rounded-xl md:rounded-2xl shadow-lg border border-neutral-800 touch-manipulation select-none">
                         {/* Keyboard Header & Layout Switcher */}
                         <div className="flex items-center justify-between text-[10px] md:text-[11px] text-neutral-400 mb-1.5 px-1">

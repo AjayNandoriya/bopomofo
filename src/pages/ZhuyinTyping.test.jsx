@@ -80,5 +80,89 @@ describe('ZhuyinTyping Component', () => {
         fireEvent.click(keyboardToggle);
         expect(screen.queryByText(/台灣標準注音鍵盤/i)).toBeNull();
     });
+
+    it('allows entering Chinese characters directly with Bopomofo keyboard', async () => {
+        render(<ZhuyinTyping />);
+        const card = screen.getByText(/自我介紹與日常習慣/i);
+        fireEvent.click(card);
+
+        await waitFor(() => {
+            expect(screen.getByText(/當前目標字/i)).toBeDefined();
+            expect(screen.getByText(/注音: ㄋㄧˇ/i)).toBeDefined();
+        });
+
+        // Directly enter the Chinese character '你'
+        fireEvent.keyDown(window, { key: '你' });
+
+        // Should match immediately and advance to '好' (ㄏㄠˇ)
+        await waitFor(() => {
+            expect(screen.getByText(/注音: ㄏㄠˇ/i)).toBeDefined();
+        });
+    });
+
+    it('allows entering multi-character Chinese words directly via native input', async () => {
+        const { container } = render(<ZhuyinTyping />);
+        const card = screen.getByText(/自我介紹與日常習慣/i);
+        fireEvent.click(card);
+
+        await waitFor(() => {
+            expect(screen.getByText(/當前目標字/i)).toBeDefined();
+        });
+
+        const input = container.querySelector('input[type="text"]');
+        expect(input).toBeDefined();
+
+        // Simulate mobile IME candidate selection of "你好"
+        fireEvent.input(input, { target: { value: '你好' } });
+
+        // Advances past '你' and '好' to punctuation '！'
+        await waitFor(() => {
+            const currentSelected = container.querySelector('.ring-2.ring-blue-500');
+            expect(currentSelected?.textContent).toContain('！');
+        });
+    });
+
+    it('shows error state when entering incorrect Chinese character', async () => {
+        render(<ZhuyinTyping />);
+        const card = screen.getByText(/自我介紹與日常習慣/i);
+        fireEvent.click(card);
+
+        await waitFor(() => {
+            expect(screen.getByText(/當前目標字/i)).toBeDefined();
+            expect(screen.getByText(/注音: ㄋㄧˇ/i)).toBeDefined();
+        });
+
+        // Enter wrong Chinese character '他'
+        fireEvent.keyDown(window, { key: '他' });
+
+        // Buffer should display '他' with error styling and not advance
+        await waitFor(() => {
+            expect(screen.getByText('他')).toBeDefined();
+            expect(screen.getByText(/注音: ㄋㄧˇ/i)).toBeDefined();
+        });
+    });
+
+    it('removes extra virtual keyboard on mobile screens and displays mobile banner', async () => {
+        // Mock mobile screen width
+        window.innerWidth = 390;
+        render(<ZhuyinTyping />);
+        const card = screen.getByText(/自我介紹與日常習慣/i);
+        fireEvent.click(card);
+
+        await waitFor(() => {
+            expect(screen.getByText(/文章列表 \(Back\)/i)).toBeDefined();
+        });
+
+        // On mobile, browser virtual keyboard should NOT be displayed
+        expect(screen.queryByText(/台灣標準注音鍵盤/i)).toBeNull();
+
+        // Mobile mode indicators should be present
+        expect(screen.getByText(/手機注音模式/i)).toBeDefined();
+        expect(screen.getByText(/手機注音鍵盤直接輸入模式/i)).toBeDefined();
+
+        // Restore window width
+        window.innerWidth = 1024;
+    });
 });
+
 
