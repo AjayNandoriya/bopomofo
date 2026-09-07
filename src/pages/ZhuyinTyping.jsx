@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { TOCFL_LEVELS, TOCFL_PARAGRAPHS } from '../data/tocflTyping';
 import { toTraditional, annotateZhuyin } from '../utils/converter';
+import { useFontSize, FontSizeControl } from '../context/FontSizeContext';
 import {
     KEY_TO_ZHUYIN,
     ZHUYIN_TO_KEY,
@@ -12,6 +13,9 @@ import {
 } from '../utils/zhuyinKeyboard';
 
 function ZhuyinTyping() {
+    // Font size state
+    const { fontSize, pinyinSize, zhuyinSize } = useFontSize();
+
     // Selection state
     const [selectedLevel, setSelectedLevel] = useState('A'); // 'A' | 'B' | 'C' | 'custom'
     const [activeParagraph, setActiveParagraph] = useState(null);
@@ -416,7 +420,7 @@ function ZhuyinTyping() {
     // Render Paragraph Selector View
     if (!activeParagraph) {
         return (
-            <div className="h-full flex flex-col overflow-y-auto bg-neutral-50 p-6 md:p-8">
+            <div className="h-full flex flex-col overflow-y-auto overflow-x-hidden bg-neutral-50 p-3 sm:p-6 md:p-8 w-full max-w-full">
                 {/* Header */}
                 <div className="max-w-6xl mx-auto w-full mb-8">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -430,6 +434,10 @@ function ZhuyinTyping() {
                             <p className="text-neutral-600 mt-1">
                                 Select a TOCFL vocabulary level to practice reading and typing in standard Taiwanese Bopomofo.
                             </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-neutral-500 font-medium">字體:</span>
+                            <FontSizeControl />
                         </div>
                     </div>
 
@@ -563,7 +571,7 @@ function ZhuyinTyping() {
 
     // Render Active Practice Arena
     return (
-        <div className="h-full flex flex-col bg-neutral-100/70 overflow-hidden select-none">
+        <div className="h-full flex flex-col bg-neutral-100/70 overflow-y-auto md:overflow-hidden overflow-x-hidden select-none w-full max-w-full">
             {/* Native Input for Direct Keyboard & IME Support */}
             <input
                 ref={hiddenInputRef}
@@ -623,7 +631,7 @@ function ZhuyinTyping() {
             />
 
             {/* Top Navigation & Settings Bar */}
-            <header className="flex-none bg-white border-b border-neutral-200 px-3 md:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 z-20 shadow-xs">
+            <header className="flex-none bg-white border-b border-neutral-200 px-3 md:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 z-20 shadow-xs max-w-full overflow-x-hidden">
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                         <button
@@ -653,7 +661,9 @@ function ZhuyinTyping() {
                 </div>
 
                 {/* Controls (Scrollable on small mobile screens) */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1 no-scrollbar">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1 no-scrollbar max-w-full">
+                    <FontSizeControl compact />
+
                     <button
                         onClick={() => setShowPinyin(p => !p)}
                         className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${showPinyin
@@ -729,8 +739,8 @@ function ZhuyinTyping() {
             </header>
 
             {/* Performance Stats HUD Bar */}
-            <div className="flex-none bg-neutral-900 text-white px-3 md:px-6 py-2 flex items-center justify-between shadow-inner">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs md:text-sm">
+            <div className="flex-none bg-neutral-900 text-white px-3 md:px-6 py-2 flex items-center justify-between shadow-inner max-w-full overflow-x-hidden">
+                <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-xs md:text-sm min-w-0">
                     <div className="flex items-baseline gap-1">
                         <span className="text-neutral-400 text-[11px] font-semibold">CPM:</span>
                         <span className="text-base md:text-xl font-mono font-bold text-amber-400">{cpm}</span>
@@ -778,10 +788,10 @@ function ZhuyinTyping() {
             </div>
 
             {/* Main Reading & Practice Area */}
-            <div className="flex-1 flex flex-col overflow-hidden p-2 sm:p-4 md:p-6">
+            <div className="flex-1 flex flex-col md:overflow-hidden overflow-y-auto overflow-x-hidden p-2 sm:p-4 md:p-6 w-full max-w-full">
                 {/* Active Target Character Hint Overlay */}
                 {activeTargetInfo && (
-                    <div className="flex-none mb-2 bg-white border border-neutral-200/90 rounded-xl px-3 py-2 shadow-xs flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex-none mb-2 bg-white border border-neutral-200/90 rounded-xl px-3 py-2 shadow-xs flex flex-wrap items-center justify-between gap-2 max-w-full">
                         <div className="flex items-center gap-2 md:gap-3">
                             <span className="text-[11px] md:text-xs font-bold uppercase tracking-wider text-neutral-400">
                                 當前目標字:
@@ -828,9 +838,9 @@ function ZhuyinTyping() {
                     onClick={() => {
                         hiddenInputRef.current?.focus();
                     }}
-                    className="flex-1 bg-white rounded-xl md:rounded-2xl border border-neutral-200 shadow-xs p-3 md:p-6 overflow-y-auto relative cursor-text"
+                    className="flex-1 min-h-[140px] bg-white rounded-xl md:rounded-2xl border border-neutral-200 shadow-xs p-3 md:p-6 overflow-y-auto overflow-x-hidden relative cursor-text max-w-full"
                 >
-                    <div className="flex flex-wrap gap-x-2 md:gap-x-3 gap-y-3 md:gap-y-4 items-center leading-loose">
+                    <div className="flex flex-wrap gap-x-0.5 sm:gap-x-1 gap-y-2 md:gap-y-3 items-center leading-loose">
                         {charStream.map((item, idx) => {
                             const isCompleted = idx < currentIndex;
                             const isCurrent = idx === currentIndex;
@@ -842,7 +852,7 @@ function ZhuyinTyping() {
                             return (
                                 <div
                                     key={idx}
-                                    className={`relative flex flex-col items-center justify-center p-1 md:p-1.5 rounded-lg transition-all ${isCurrent
+                                    className={`relative flex flex-col items-center justify-center px-1 py-0.5 md:px-1.5 md:py-1 rounded-md transition-all ${isCurrent
                                         ? 'bg-blue-50 ring-2 ring-blue-500 shadow-sm scale-105 z-10'
                                         : isCompleted
                                             ? 'bg-emerald-50/60 text-emerald-900'
@@ -850,34 +860,46 @@ function ZhuyinTyping() {
                                         }`}
                                 >
                                     {/* Pinyin (Top) */}
-                                    <div className={`h-3.5 flex items-end justify-center text-[10px] md:text-[11px] font-mono leading-none ${showPinyin && !item.isPunctuation
-                                        ? isCompleted ? 'text-emerald-600' : isCurrent ? 'text-blue-600 font-bold' : 'text-neutral-400'
-                                        : 'invisible'
-                                        }`}>
+                                    <div
+                                        className={`flex items-end justify-center font-mono leading-none ${showPinyin && !item.isPunctuation
+                                            ? isCompleted ? 'text-emerald-600' : isCurrent ? 'text-blue-600 font-bold' : 'text-neutral-400'
+                                            : 'invisible'
+                                        }`}
+                                        style={{ height: `${pinyinSize + 3}px`, fontSize: `${pinyinSize}px` }}
+                                    >
                                         {item.pinyin || ''}
                                     </div>
 
                                     {/* Character + Zhuyin annotation */}
-                                    <div className="flex items-center gap-0.5 md:gap-1">
-                                        <span className={`text-xl md:text-3xl font-serif leading-none ${isCompleted
-                                            ? 'text-emerald-700 font-bold'
-                                            : isCurrent
-                                                ? 'text-neutral-900 font-bold'
-                                                : 'text-neutral-700'
-                                            }`}>
+                                    <div className="flex items-center gap-0.5">
+                                        <span
+                                            className={`font-serif leading-none whitespace-pre ${isCompleted
+                                                ? 'text-emerald-700 font-bold'
+                                                : isCurrent
+                                                    ? 'text-neutral-900 font-bold'
+                                                    : 'text-neutral-700'
+                                            }`}
+                                            style={{ fontSize: `${fontSize}px` }}
+                                        >
                                             {item.char}
                                         </span>
 
                                         {/* Zhuyin (Vertical Right) */}
                                         {showZhuyin && !item.isPunctuation && item.zhuyin && (
-                                            <div className={`flex flex-col text-[9px] md:text-[10px] items-center justify-center font-mono leading-tight ${isCompleted
-                                                ? 'text-emerald-600 font-medium'
-                                                : isCurrent
-                                                    ? 'text-blue-700 font-bold'
-                                                    : 'text-neutral-400'
-                                                }`}>
+                                            <div
+                                                className={`flex flex-col items-center justify-center font-mono leading-tight ml-0.5 ${isCompleted
+                                                    ? 'text-emerald-600 font-medium'
+                                                    : isCurrent
+                                                        ? 'text-blue-700 font-bold'
+                                                        : 'text-neutral-400'
+                                                }`}
+                                                style={{
+                                                    fontSize: `${zhuyinSize}px`,
+                                                    width: `${Math.round(zhuyinSize * 1.2)}px`
+                                                }}
+                                            >
                                                 {item.zhuyin.split('').map((z, zi) => (
-                                                    <span key={zi} className="block transform scale-105 origin-center">{z}</span>
+                                                    <span key={zi} className="block transform scale-105 origin-center leading-none">{z}</span>
                                                 ))}
                                             </div>
                                         )}
