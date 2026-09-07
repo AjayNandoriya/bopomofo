@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-do
 import Translation from './pages/Translation'
 import Stories from './pages/Stories'
 import Songs from './pages/Songs'
+import ZhuyinTyping from './pages/ZhuyinTyping'
 
 function NavLink({ to, children }) {
   const location = useLocation();
@@ -32,6 +33,7 @@ function Layout() {
           <NavLink to="/">Translation</NavLink>
           <NavLink to="/stories">Stories</NavLink>
           <NavLink to="/songs">Songs</NavLink>
+          <NavLink to="/typing">Zhuyin Typing</NavLink>
         </div>
       </nav>
 
@@ -41,6 +43,7 @@ function Layout() {
           <Route path="/" element={<Translation />} />
           <Route path="/stories" element={<Stories />} />
           <Route path="/songs" element={<Songs />} />
+          <Route path="/typing" element={<ZhuyinTyping />} />
         </Routes>
       </div>
     </div>
