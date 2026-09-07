@@ -57,6 +57,8 @@ function ZhuyinTyping() {
     const [enableKeyGuide, setEnableKeyGuide] = useState(true);
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [activeKeyPressed, setActiveKeyPressed] = useState(null);
+    const [inputCoords, setInputCoords] = useState({ top: 12, left: 12 });
+    const [viewportHeight, setViewportHeight] = useState(null);
 
     // Resize listener for mobile responsiveness
     useEffect(() => {
@@ -66,6 +68,28 @@ function ZhuyinTyping() {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Visual viewport listener to adapt to mobile keyboard height in full screen
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.visualViewport) return;
+
+        const handleVisualResize = () => {
+            if (isMobile) {
+                setViewportHeight(window.visualViewport.height);
+            } else {
+                setViewportHeight(null);
+            }
+        };
+
+        window.visualViewport.addEventListener('resize', handleVisualResize);
+        window.visualViewport.addEventListener('scroll', handleVisualResize);
+        handleVisualResize();
+
+        return () => {
+            window.visualViewport.removeEventListener('resize', handleVisualResize);
+            window.visualViewport.removeEventListener('scroll', handleVisualResize);
+        };
+    }, [isMobile]);
 
     // Filtered paragraphs by level
     const currentParagraphs = useMemo(() => {
@@ -92,18 +116,40 @@ function ZhuyinTyping() {
         soundEffects.enabled = soundEnabled;
     }, [soundEnabled]);
 
-    // Keep active typing character in view inside the reading box without shifting the screen
+    // Keep active typing character and typing line in view inside the reading box
     useEffect(() => {
-        if (activeCharRef.current && readingBoxRef.current) {
-            const box = readingBoxRef.current;
-            const charEl = activeCharRef.current;
-            const boxRect = box.getBoundingClientRect();
-            const charRect = charEl.getBoundingClientRect();
+        if (!readingBoxRef.current || !activeCharRef.current) return;
 
-            if (charRect.bottom > boxRect.bottom - 24) {
-                box.scrollTop += (charRect.bottom - boxRect.bottom) + 32;
-            } else if (charRect.top < boxRect.top + 24) {
-                box.scrollTop -= (boxRect.top - charRect.top) + 32;
+        const box = readingBoxRef.current;
+        const charEl = activeCharRef.current;
+
+        const charTop = charEl.offsetTop;
+        const charLeft = charEl.offsetLeft;
+        const charHeight = charEl.offsetHeight || 36;
+        const charBottom = charTop + charHeight;
+
+        // Position the hidden input directly on top of the active character
+        setInputCoords({ top: charTop, left: charLeft });
+
+        const boxScrollTop = box.scrollTop;
+        const boxClientHeight = box.clientHeight;
+
+        // If the typing character moves past the comfortable lower portion of the box, center it
+        if (charBottom > boxScrollTop + boxClientHeight - 20) {
+            const targetTop = Math.max(0, charTop - Math.floor(boxClientHeight / 2) + Math.floor(charHeight / 2));
+            if (typeof box.scrollTo === 'function') {
+                box.scrollTo({ top: targetTop, behavior: 'smooth' });
+            } else {
+                box.scrollTop = targetTop;
+            }
+        }
+        // If the typing character is above the visible top of the box (e.g. backspace), scroll up gently
+        else if (charTop < boxScrollTop + 12) {
+            const targetTop = Math.max(0, charTop - 16);
+            if (typeof box.scrollTo === 'function') {
+                box.scrollTo({ top: targetTop, behavior: 'smooth' });
+            } else {
+                box.scrollTop = targetTop;
             }
         }
     }, [currentIndex]);
@@ -162,6 +208,11 @@ function ZhuyinTyping() {
         setTotalKeystrokes(0);
         setStreak(0);
         setMaxStreak(0);
+
+        // Reset reading box scroll to top so first line is immediately visible
+        if (readingBoxRef.current) {
+            readingBoxRef.current.scrollTop = 0;
+        }
 
         // Focus hidden input for mobile/desktop direct typing without scrolling the viewport
         setTimeout(() => {
@@ -592,84 +643,13 @@ function ZhuyinTyping() {
 
     // Render Active Practice Arena
     return (
-        <div className={`h-full flex flex-col bg-neutral-100/70 select-none w-full max-w-full ${isFullScreen
-            ? 'fixed inset-0 z-50 overflow-hidden bg-neutral-100'
-            : 'overflow-y-auto md:overflow-hidden overflow-x-hidden'
-            }`}>
-            {/* Native Input for Direct Keyboard & IME Support - Fixed offscreen to prevent mobile viewport shift */}
-            <input
-                ref={hiddenInputRef}
-                type="text"
-                className="opacity-0 pointer-events-none -z-50"
-                style={{
-                    position: 'fixed',
-                    bottom: '16px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: '1px',
-                    height: '1px',
-                    fontSize: '16px', // 16px font prevents iOS Safari auto-zoom and viewport jumping
-                    border: 'none',
-                    outline: 'none',
-                    background: 'transparent',
-                    color: 'transparent',
-                    caretColor: 'transparent',
-                    clipPath: 'inset(50%)'
-                }}
-                autoCapitalize="none"
-                autoCorrect="off"
-                autoComplete="off"
-                spellCheck="false"
-                tabIndex={-1}
-                onCompositionStart={() => {
-                    isComposingRef.current = true;
-                }}
-                onCompositionUpdate={(e) => {
-                    if (e.data) {
-                        setInputBuffer(e.data);
-                    }
-                }}
-                onCompositionEnd={(e) => {
-                    isComposingRef.current = false;
-                    const text = e.data || e.target.value;
-                    if (text) {
-                        processInputText(text);
-                    }
-                    e.target.value = '';
-                }}
-                onInput={(e) => {
-                    if (isComposingRef.current) return;
-                    const val = e.target.value;
-                    if (val) {
-                        processInputText(val);
-                        e.target.value = '';
-                    }
-                }}
-                onChange={(e) => {
-                    if (isComposingRef.current) return;
-                    const val = e.target.value;
-                    if (val) {
-                        processInputText(val);
-                        e.target.value = '';
-                    }
-                }}
-                onKeyDown={(e) => {
-                    if (e.key === 'Backspace') {
-                        if (inputBuffer.length > 0 || hasError) {
-                            e.preventDefault();
-                            soundEffects.playKeypress();
-                            setInputBuffer(prev => prev.slice(0, -1));
-                            setHasError(false);
-                        }
-                    } else if (e.key === 'Enter') {
-                        if (activeChar && activeChar.isPunctuation) {
-                            e.preventDefault();
-                            processInputText('\n');
-                        }
-                    }
-                }}
-            />
-
+        <div
+            className={`flex flex-col bg-neutral-100/70 select-none w-full max-w-full ${isFullScreen
+                ? 'fixed inset-0 z-50 overflow-hidden bg-neutral-100'
+                : 'h-full overflow-hidden'
+            }`}
+            style={isFullScreen && viewportHeight ? { height: `${viewportHeight}px` } : {}}
+        >
             {/* Top Navigation & Settings Bar */}
             <header className={`flex-none bg-white border-b border-neutral-200 px-3 md:px-6 py-2 z-20 shadow-xs max-w-full overflow-x-hidden ${isFullScreen ? 'flex items-center justify-between gap-2' : 'flex flex-col sm:flex-row sm:items-center justify-between gap-2'
                 }`}>
@@ -857,7 +837,7 @@ function ZhuyinTyping() {
             </div>
 
             {/* Main Reading & Practice Area */}
-            <div className="flex-1 flex flex-col md:overflow-hidden overflow-y-auto overflow-x-hidden p-2 sm:p-4 md:p-6 w-full max-w-full">
+            <div className="flex-1 flex flex-col overflow-hidden p-2 sm:p-4 md:p-6 w-full max-w-full min-h-0">
                 {/* Active Target Character Hint Overlay */}
                 {activeTargetInfo && (
                     <div className="flex-none mb-2 bg-white border border-neutral-200/90 rounded-xl px-3 py-2 shadow-xs flex flex-wrap items-center justify-between gap-2 max-w-full">
@@ -908,8 +888,81 @@ function ZhuyinTyping() {
                     onClick={() => {
                         hiddenInputRef.current?.focus({ preventScroll: true });
                     }}
-                    className="flex-1 min-h-[140px] bg-white rounded-xl md:rounded-2xl border border-neutral-200 shadow-xs p-3 md:p-6 overflow-y-auto overflow-x-hidden relative cursor-text max-w-full"
+                    className="flex-1 min-h-[120px] bg-white rounded-xl md:rounded-2xl border border-neutral-200 shadow-xs p-3 md:p-6 overflow-y-auto overflow-x-hidden relative cursor-text max-w-full"
                 >
+                    {/* Native Input for Direct Keyboard & IME Support - positioned directly at active character */}
+                    <input
+                        ref={hiddenInputRef}
+                        type="text"
+                        className="opacity-0 pointer-events-none"
+                        style={{
+                            position: 'absolute',
+                            top: `${inputCoords.top}px`,
+                            left: `${inputCoords.left}px`,
+                            width: '1px',
+                            height: '1px',
+                            fontSize: '16px', // 16px font prevents iOS Safari auto-zoom and viewport jumping
+                            border: 'none',
+                            outline: 'none',
+                            background: 'transparent',
+                            color: 'transparent',
+                            caretColor: 'transparent',
+                            zIndex: -1
+                        }}
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        autoComplete="off"
+                        spellCheck="false"
+                        tabIndex={-1}
+                        onCompositionStart={() => {
+                            isComposingRef.current = true;
+                        }}
+                        onCompositionUpdate={(e) => {
+                            if (e.data) {
+                                setInputBuffer(e.data);
+                            }
+                        }}
+                        onCompositionEnd={(e) => {
+                            isComposingRef.current = false;
+                            const text = e.data || e.target.value;
+                            if (text) {
+                                processInputText(text);
+                            }
+                            e.target.value = '';
+                        }}
+                        onInput={(e) => {
+                            if (isComposingRef.current) return;
+                            const val = e.target.value;
+                            if (val) {
+                                processInputText(val);
+                                e.target.value = '';
+                            }
+                        }}
+                        onChange={(e) => {
+                            if (isComposingRef.current) return;
+                            const val = e.target.value;
+                            if (val) {
+                                processInputText(val);
+                                e.target.value = '';
+                            }
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Backspace') {
+                                if (inputBuffer.length > 0 || hasError) {
+                                    e.preventDefault();
+                                    soundEffects.playKeypress();
+                                    setInputBuffer(prev => prev.slice(0, -1));
+                                    setHasError(false);
+                                }
+                            } else if (e.key === 'Enter') {
+                                if (activeChar && activeChar.isPunctuation) {
+                                    e.preventDefault();
+                                    processInputText('\n');
+                                }
+                            }
+                        }}
+                    />
+
                     <div className="flex flex-wrap gap-x-0.5 sm:gap-x-1 gap-y-2 md:gap-y-3 items-center leading-loose">
                         {charStream.map((item, idx) => {
                             const isCompleted = idx < currentIndex;
@@ -990,22 +1043,33 @@ function ZhuyinTyping() {
                 {!isFullScreen && isMobile && (
                     <div
                         onClick={() => hiddenInputRef.current?.focus({ preventScroll: true })}
-                        className="flex-none mt-2 p-3 bg-white rounded-xl border border-purple-100 shadow-xs flex items-center justify-between cursor-pointer active:bg-purple-50/70 transition"
+                        className="flex-none mt-2 p-2.5 bg-white rounded-xl border border-purple-100 shadow-xs flex items-center justify-between cursor-pointer active:bg-purple-50/70 transition"
                     >
-                        <div className="flex items-center gap-2.5">
-                            <span className="text-xl">📱</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg">📱</span>
                             <div className="text-left">
                                 <div className="text-xs font-bold text-neutral-800">
                                     手機注音鍵盤直接輸入模式
                                 </div>
-                                <div className="text-[11px] text-neutral-500">
-                                    點擊此處或上方文章開啟鍵盤，直接輸入漢字或注音
+                                <div className="text-[10px] text-neutral-500">
+                                    點擊開啟鍵盤打字，或切換全螢幕享受純淨空間
                                 </div>
                             </div>
                         </div>
-                        <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200 pointer-events-none shrink-0">
-                            開啟鍵盤
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsFullScreen(true);
+                                    setTimeout(() => {
+                                        hiddenInputRef.current?.focus({ preventScroll: true });
+                                    }, 50);
+                                }}
+                                className="text-xs font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 px-2.5 py-1 rounded-lg border border-purple-200 cursor-pointer"
+                            >
+                                ⛶ 全螢幕模式
+                            </button>
+                        </div>
                     </div>
                 )}
 

@@ -191,9 +191,32 @@ describe('ZhuyinTyping Component', () => {
         await waitFor(() => {
             expect(screen.getByText(/全螢幕 \(Full Screen\)/i)).toBeDefined();
             expect(screen.getByText(/手機注音鍵盤直接輸入模式/i)).toBeDefined();
+            expect(screen.getByText(/⛶ 全螢幕模式/i)).toBeDefined();
         });
 
         window.innerWidth = 1024;
+    });
+
+    it('positions input dynamically at the active typing character to keep the typing line in view', async () => {
+        render(<ZhuyinTyping />);
+        const card = screen.getByText(/自我介紹與日常習慣/i);
+        fireEvent.click(card);
+
+        await waitFor(() => {
+            expect(screen.getByText(/當前目標字:/i)).toBeDefined();
+        });
+
+        // The hidden input should be present inside the reading box
+        const inputs = document.querySelectorAll('input[type="text"]');
+        expect(inputs.length).toBeGreaterThan(0);
+        const hiddenInput = inputs[0];
+
+        // Type a character to advance
+        fireEvent.input(hiddenInput, { target: { value: '我' } });
+
+        await waitFor(() => {
+            expect(screen.getByText(/進度:/i)).toBeDefined();
+        });
     });
 });
 
