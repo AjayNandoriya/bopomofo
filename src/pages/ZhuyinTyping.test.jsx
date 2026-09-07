@@ -163,6 +163,39 @@ describe('ZhuyinTyping Component', () => {
         // Restore window width
         window.innerWidth = 1024;
     });
+
+    it('toggles full screen focus mode on mobile to maximize typing space', async () => {
+        window.innerWidth = 390;
+        render(<ZhuyinTyping />);
+        const card = screen.getByText(/自我介紹與日常習慣/i);
+        fireEvent.click(card);
+
+        await waitFor(() => {
+            expect(screen.getByText(/全螢幕 \(Full Screen\)/i)).toBeDefined();
+        });
+
+        // Click Full Screen button
+        const fullScreenBtn = screen.getByText(/全螢幕 \(Full Screen\)/i);
+        fireEvent.click(fullScreenBtn);
+
+        // When in full screen, HUD and mobile banner are hidden, exit button appears
+        await waitFor(() => {
+            expect(screen.getByText(/退出全螢幕/i)).toBeDefined();
+            expect(screen.queryByText(/手機注音鍵盤直接輸入模式/i)).toBeNull();
+        });
+
+        // Click Exit Full Screen button
+        const exitBtn = screen.getByText(/退出全螢幕/i);
+        fireEvent.click(exitBtn);
+
+        await waitFor(() => {
+            expect(screen.getByText(/全螢幕 \(Full Screen\)/i)).toBeDefined();
+            expect(screen.getByText(/手機注音鍵盤直接輸入模式/i)).toBeDefined();
+        });
+
+        window.innerWidth = 1024;
+    });
 });
+
 
 

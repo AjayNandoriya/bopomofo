@@ -21,11 +21,16 @@ function ZhuyinTyping() {
     const [activeParagraph, setActiveParagraph] = useState(null);
     const [customInputText, setCustomInputText] = useState('');
 
+    // Full screen focus mode (hides menus and extra banners)
+    const [isFullScreen, setIsFullScreen] = useState(false);
+
     // Device / Mobile responsiveness state
     const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     const [keyboardLayoutMode, setKeyboardLayoutMode] = useState('auto'); // 'auto' | 'mobile' | 'desktop'
     const hiddenInputRef = useRef(null);
     const isComposingRef = useRef(false);
+    const readingBoxRef = useRef(null);
+    const activeCharRef = useRef(null);
 
     // Prepared character stream for typing
     // Array of { char, zhuyin, pinyin, isPunctuation }
@@ -87,6 +92,22 @@ function ZhuyinTyping() {
         soundEffects.enabled = soundEnabled;
     }, [soundEnabled]);
 
+    // Keep active typing character in view inside the reading box without shifting the screen
+    useEffect(() => {
+        if (activeCharRef.current && readingBoxRef.current) {
+            const box = readingBoxRef.current;
+            const charEl = activeCharRef.current;
+            const boxRect = box.getBoundingClientRect();
+            const charRect = charEl.getBoundingClientRect();
+
+            if (charRect.bottom > boxRect.bottom - 24) {
+                box.scrollTop += (charRect.bottom - boxRect.bottom) + 32;
+            } else if (charRect.top < boxRect.top + 24) {
+                box.scrollTop -= (boxRect.top - charRect.top) + 32;
+            }
+        }
+    }, [currentIndex]);
+
     // Haptic feedback helper for mobile touch
     const triggerHaptic = useCallback(() => {
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -142,10 +163,10 @@ function ZhuyinTyping() {
         setStreak(0);
         setMaxStreak(0);
 
-        // Focus hidden input for mobile/desktop direct typing
+        // Focus hidden input for mobile/desktop direct typing without scrolling the viewport
         setTimeout(() => {
             if (hiddenInputRef.current) {
-                hiddenInputRef.current.focus();
+                hiddenInputRef.current.focus({ preventScroll: true });
             }
         }, 50);
     }, []);
@@ -571,14 +592,33 @@ function ZhuyinTyping() {
 
     // Render Active Practice Arena
     return (
-        <div className="h-full flex flex-col bg-neutral-100/70 overflow-y-auto md:overflow-hidden overflow-x-hidden select-none w-full max-w-full">
-            {/* Native Input for Direct Keyboard & IME Support */}
+        <div className={`h-full flex flex-col bg-neutral-100/70 select-none w-full max-w-full ${isFullScreen
+            ? 'fixed inset-0 z-50 overflow-hidden bg-neutral-100'
+            : 'overflow-y-auto md:overflow-hidden overflow-x-hidden'
+            }`}>
+            {/* Native Input for Direct Keyboard & IME Support - Fixed offscreen to prevent mobile viewport shift */}
             <input
                 ref={hiddenInputRef}
                 type="text"
-                className="opacity-0 absolute top-0 left-0 w-8 h-8 pointer-events-none -z-10"
+                className="opacity-0 pointer-events-none -z-50"
+                style={{
+                    position: 'fixed',
+                    bottom: '16px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '1px',
+                    height: '1px',
+                    fontSize: '16px', // 16px font prevents iOS Safari auto-zoom and viewport jumping
+                    border: 'none',
+                    outline: 'none',
+                    background: 'transparent',
+                    color: 'transparent',
+                    caretColor: 'transparent',
+                    clipPath: 'inset(50%)'
+                }}
                 autoCapitalize="none"
                 autoCorrect="off"
+                autoComplete="off"
                 spellCheck="false"
                 tabIndex={-1}
                 onCompositionStart={() => {
@@ -631,33 +671,41 @@ function ZhuyinTyping() {
             />
 
             {/* Top Navigation & Settings Bar */}
-            <header className="flex-none bg-white border-b border-neutral-200 px-3 md:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 z-20 shadow-xs max-w-full overflow-x-hidden">
-                <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+            <header className={`flex-none bg-white border-b border-neutral-200 px-3 md:px-6 py-2 z-20 shadow-xs max-w-full overflow-x-hidden ${isFullScreen ? 'flex items-center justify-between gap-2' : 'flex flex-col sm:flex-row sm:items-center justify-between gap-2'
+                }`}>
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
                         <button
-                            onClick={() => setActiveParagraph(null)}
-                            className="px-2.5 py-1.5 rounded-lg text-xs md:text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 flex items-center gap-1 transition cursor-pointer"
+                            onClick={() => {
+                                setIsFullScreen(false);
+                                setActiveParagraph(null);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg text-xs md:text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 flex items-center gap-1 transition cursor-pointer shrink-0"
                         >
                             <span>← 文章列表 (Back)</span>
                         </button>
-                        <div className="h-4 w-px bg-neutral-200"></div>
-                        <div className="truncate max-w-[200px] sm:max-w-xs">
-                            <h2 className="text-sm md:text-base font-bold text-neutral-800 leading-tight truncate">
+                        <div className="h-4 w-px bg-neutral-200 shrink-0"></div>
+                        <div className="truncate max-w-[160px] sm:max-w-xs">
+                            <h2 className="text-xs sm:text-sm md:text-base font-bold text-neutral-800 leading-tight truncate">
                                 {activeParagraph.titleZh}
                             </h2>
-                            <p className="text-[11px] text-neutral-400 hidden sm:block truncate">
-                                {activeParagraph.title}
-                            </p>
+                            {!isFullScreen && (
+                                <p className="text-[11px] text-neutral-400 hidden sm:block truncate">
+                                    {activeParagraph.title}
+                                </p>
+                            )}
                         </div>
                     </div>
 
-                    <button
-                        onClick={() => startPractice(activeParagraph)}
-                        className="sm:hidden p-1.5 text-xs rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 border border-neutral-200 cursor-pointer shrink-0"
-                        title="Restart paragraph"
-                    >
-                        🔄
-                    </button>
+                    {!isFullScreen && (
+                        <button
+                            onClick={() => startPractice(activeParagraph)}
+                            className="sm:hidden p-1.5 text-xs rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 border border-neutral-200 cursor-pointer shrink-0"
+                            title="Restart paragraph"
+                        >
+                            🔄
+                        </button>
+                    )}
                 </div>
 
                 {/* Controls (Scrollable on small mobile screens) */}
@@ -686,98 +734,119 @@ function ZhuyinTyping() {
                         注音 (Zhuyin)
                     </button>
 
+                    {/* Full screen toggle button */}
                     <button
-                        onClick={() => setEnableKeyGuide(g => !g)}
-                        className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${enableKeyGuide
-                            ? 'bg-amber-50 text-amber-700 border-amber-300 font-bold'
-                            : 'bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-50'
+                        onClick={() => {
+                            setIsFullScreen(f => !f);
+                            setTimeout(() => {
+                                hiddenInputRef.current?.focus({ preventScroll: true });
+                            }, 50);
+                        }}
+                        className={`px-2.5 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1 shadow-2xs ${isFullScreen
+                            ? 'bg-purple-600 text-white border-purple-600 font-bold hover:bg-purple-700'
+                            : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
                             }`}
-                        title="Highlight next key on virtual keyboard"
+                        title={isFullScreen ? 'Exit full screen' : 'Hide menus and expand full screen for typing'}
                     >
-                        💡 導引
+                        {isFullScreen ? '✕ 退出全螢幕' : '⛶ 全螢幕 (Full Screen)'}
                     </button>
 
-                    <button
-                        onClick={() => setSoundEnabled(s => !s)}
-                        className={`p-1.5 text-xs rounded-md transition border cursor-pointer shrink-0 ${soundEnabled
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-white text-neutral-400 border-neutral-200'
-                            }`}
-                        title={soundEnabled ? 'Mute Sound' : 'Enable Sound'}
-                    >
-                        {soundEnabled ? '🔊' : '🔇'}
-                    </button>
+                    {!isFullScreen && (
+                        <>
+                            <button
+                                onClick={() => setEnableKeyGuide(g => !g)}
+                                className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${enableKeyGuide
+                                    ? 'bg-amber-50 text-amber-700 border-amber-300 font-bold'
+                                    : 'bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-50'
+                                    }`}
+                                title="Highlight next key on virtual keyboard"
+                            >
+                                💡 導引
+                            </button>
 
-                    {/* Desktop virtual keyboard toggle */}
-                    {!isMobile && (
-                        <button
-                            onClick={() => setShowKeyboard(k => !k)}
-                            className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${showKeyboard
-                                ? 'bg-neutral-900 text-white border-neutral-900'
-                                : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
-                                }`}
-                        >
-                            ⌨️ 鍵盤 ({showKeyboard ? '收合' : '展開'})
-                        </button>
+                            <button
+                                onClick={() => setSoundEnabled(s => !s)}
+                                className={`p-1.5 text-xs rounded-md transition border cursor-pointer shrink-0 ${soundEnabled
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-white text-neutral-400 border-neutral-200'
+                                    }`}
+                                title={soundEnabled ? 'Mute Sound' : 'Enable Sound'}
+                            >
+                                {soundEnabled ? '🔊' : '🔇'}
+                            </button>
+
+                            {!isMobile && (
+                                <button
+                                    onClick={() => setShowKeyboard(k => !k)}
+                                    className={`px-2 py-1 text-xs rounded-md font-medium transition border cursor-pointer whitespace-nowrap shrink-0 ${showKeyboard
+                                        ? 'bg-neutral-900 text-white border-neutral-900'
+                                        : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
+                                        }`}
+                                >
+                                    ⌨️ 鍵盤 ({showKeyboard ? '收合' : '展開'})
+                                </button>
+                            )}
+
+                            {isMobile && (
+                                <div className="px-2 py-1 text-xs rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-medium whitespace-nowrap shrink-0 flex items-center gap-1">
+                                    <span>📱 手機注音模式</span>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={() => startPractice(activeParagraph)}
+                                className="hidden sm:block p-1.5 text-xs rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 border border-neutral-200 cursor-pointer shrink-0"
+                                title="Restart paragraph"
+                            >
+                                🔄
+                            </button>
+                        </>
                     )}
-
-                    {/* Mobile mode status indicator */}
-                    {isMobile && (
-                        <div className="px-2 py-1 text-xs rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-medium whitespace-nowrap shrink-0 flex items-center gap-1">
-                            <span>📱 手機注音模式</span>
-                        </div>
-                    )}
-
-                    <button
-                        onClick={() => startPractice(activeParagraph)}
-                        className="hidden sm:block p-1.5 text-xs rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 border border-neutral-200 cursor-pointer shrink-0"
-                        title="Restart paragraph"
-                    >
-                        🔄
-                    </button>
                 </div>
             </header>
 
-            {/* Performance Stats HUD Bar */}
-            <div className="flex-none bg-neutral-900 text-white px-3 md:px-6 py-2 flex items-center justify-between shadow-inner max-w-full overflow-x-hidden">
-                <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-xs md:text-sm min-w-0">
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-neutral-400 text-[11px] font-semibold">CPM:</span>
-                        <span className="text-base md:text-xl font-mono font-bold text-amber-400">{cpm}</span>
-                    </div>
-
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-neutral-400 text-[11px] font-semibold">WPM:</span>
-                        <span className="text-sm md:text-lg font-mono font-bold text-white">{wpm}</span>
-                    </div>
-
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-neutral-400 text-[11px] font-semibold">準確率:</span>
-                        <span className={`text-sm md:text-lg font-mono font-bold ${accuracy >= 90 ? 'text-emerald-400' : accuracy >= 75 ? 'text-yellow-400' : 'text-rose-400'}`}>
-                            {accuracy}%
-                        </span>
-                    </div>
-
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-neutral-400 text-[11px] font-semibold">進度:</span>
-                        <span className="text-xs md:text-sm font-mono text-neutral-200">
-                            {currentIndex}/{charStream.length}
-                        </span>
-                    </div>
-
-                    {streak > 2 && (
-                        <div className="hidden xs:flex items-center gap-1 text-[11px] text-orange-400 bg-orange-950/60 px-2 py-0.5 rounded-full border border-orange-700/50">
-                            <span>🔥 {streak}</span>
+            {/* Performance Stats HUD Bar (Hidden in full screen to maximize reading & typing space) */}
+            {!isFullScreen && (
+                <div className="flex-none bg-neutral-900 text-white px-3 md:px-6 py-2 flex items-center justify-between shadow-inner max-w-full overflow-x-hidden">
+                    <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-xs md:text-sm min-w-0">
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-neutral-400 text-[11px] font-semibold">CPM:</span>
+                            <span className="text-base md:text-xl font-mono font-bold text-amber-400">{cpm}</span>
                         </div>
-                    )}
-                </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                    <div className="text-xs md:text-sm font-mono text-neutral-300">
-                        ⏱️ {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, '0')}
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-neutral-400 text-[11px] font-semibold">WPM:</span>
+                            <span className="text-sm md:text-lg font-mono font-bold text-white">{wpm}</span>
+                        </div>
+
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-neutral-400 text-[11px] font-semibold">準確率:</span>
+                            <span className={`text-sm md:text-lg font-mono font-bold ${accuracy >= 90 ? 'text-emerald-400' : accuracy >= 75 ? 'text-yellow-400' : 'text-rose-400'}`}>
+                                {accuracy}%
+                            </span>
+                        </div>
+
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-neutral-400 text-[11px] font-semibold">進度:</span>
+                            <span className="text-xs md:text-sm font-mono text-neutral-200">
+                                {currentIndex}/{charStream.length}
+                            </span>
+                        </div>
+
+                        {streak > 2 && (
+                            <div className="hidden xs:flex items-center gap-1 text-[11px] text-orange-400 bg-orange-950/60 px-2 py-0.5 rounded-full border border-orange-700/50">
+                                <span>🔥 {streak}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-xs md:text-sm font-mono text-neutral-300">
+                            ⏱️ {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, '0')}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Progress Bar */}
             <div className="w-full bg-neutral-200 h-1">
@@ -835,8 +904,9 @@ function ZhuyinTyping() {
 
                 {/* Reading & Characters Flow Box */}
                 <div
+                    ref={readingBoxRef}
                     onClick={() => {
-                        hiddenInputRef.current?.focus();
+                        hiddenInputRef.current?.focus({ preventScroll: true });
                     }}
                     className="flex-1 min-h-[140px] bg-white rounded-xl md:rounded-2xl border border-neutral-200 shadow-xs p-3 md:p-6 overflow-y-auto overflow-x-hidden relative cursor-text max-w-full"
                 >
@@ -852,6 +922,7 @@ function ZhuyinTyping() {
                             return (
                                 <div
                                     key={idx}
+                                    ref={isCurrent ? activeCharRef : null}
                                     className={`relative flex flex-col items-center justify-center px-1 py-0.5 md:px-1.5 md:py-1 rounded-md transition-all ${isCurrent
                                         ? 'bg-blue-50 ring-2 ring-blue-500 shadow-sm scale-105 z-10'
                                         : isCompleted
@@ -915,10 +986,10 @@ function ZhuyinTyping() {
                     </div>
                 </div>
 
-                {/* Mobile direct input guide banner */}
-                {isMobile && (
+                {/* Mobile direct input guide banner (hidden in full screen) */}
+                {!isFullScreen && isMobile && (
                     <div
-                        onClick={() => hiddenInputRef.current?.focus()}
+                        onClick={() => hiddenInputRef.current?.focus({ preventScroll: true })}
                         className="flex-none mt-2 p-3 bg-white rounded-xl border border-purple-100 shadow-xs flex items-center justify-between cursor-pointer active:bg-purple-50/70 transition"
                     >
                         <div className="flex items-center gap-2.5">
