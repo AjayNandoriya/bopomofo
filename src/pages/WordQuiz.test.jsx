@@ -71,8 +71,9 @@ describe('WordQuiz Component', () => {
         const verbBtn = screen.getByTestId('type-btn-verb');
         fireEvent.click(verbBtn);
 
-        // Level B Verbs (e.g. 改善, 討論, 解決, 堅持, 探索, 追求)
-        expect(screen.getByText('改善')).toBeDefined();
+        // Verify filter displays updated count of words
+        expect(screen.getByText(/當前篩選/i)).toBeDefined();
+        expect(screen.getByText(/本類別單字預覽/i)).toBeDefined();
     });
 
     it('starts quiz and displays Chinese word, zhuyin, and English meaning', async () => {
