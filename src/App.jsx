@@ -29,9 +29,16 @@ function Layout() {
       {/* Main Navigation */}
       <nav className="flex-none bg-white border-b border-neutral-200 px-3 md:px-6 py-2 md:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 md:gap-4 z-20 shadow-xs max-w-full overflow-x-hidden">
         <div className="flex items-center justify-between gap-2 w-full sm:w-auto">
-          <div className="font-bold text-lg md:text-xl text-neutral-800 tracking-tight shrink-0">
-            Bopomofo App
-          </div>
+          <Link to="/" className="flex items-center gap-2.5 shrink-0 group hover:opacity-90 transition-opacity">
+            <img
+              src="/mascot.jpg"
+              alt="Bopomofo Mascot"
+              className="w-8 h-8 md:w-9 md:h-9 rounded-lg shadow-xs object-cover border border-amber-200/70"
+            />
+            <div className="font-bold text-lg md:text-xl text-neutral-800 tracking-tight">
+              Bopomofo App
+            </div>
+          </Link>
           {/* Mobile font size control */}
           <div className="sm:hidden flex items-center shrink-0">
             <FontSizeControl compact />
