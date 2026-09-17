@@ -4,6 +4,7 @@ import Translation from './pages/Translation'
 import Stories from './pages/Stories'
 import Songs from './pages/Songs'
 import ZhuyinTyping from './pages/ZhuyinTyping'
+import WordQuiz from './pages/WordQuiz'
 
 function NavLink({ to, children }) {
   const location = useLocation();
@@ -43,6 +44,7 @@ function Layout() {
             <NavLink to="/stories">Stories</NavLink>
             <NavLink to="/songs">Songs</NavLink>
             <NavLink to="/typing">Zhuyin Typing</NavLink>
+            <NavLink to="/quiz">Word Quiz</NavLink>
           </div>
 
           {/* Desktop font size control */}
@@ -60,6 +62,7 @@ function Layout() {
           <Route path="/stories" element={<Stories />} />
           <Route path="/songs" element={<Songs />} />
           <Route path="/typing" element={<ZhuyinTyping />} />
+          <Route path="/quiz" element={<WordQuiz />} />
         </Routes>
       </div>
     </div>
