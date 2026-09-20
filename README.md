@@ -1,5 +1,7 @@
 # 🐉 Bopomofo App (注音符號學習平台)
 
+> **🌐 Live Demo (Firebase)**: [https://zhuyin-annotator.web.app/](https://zhuyin-annotator.web.app/)
+
 A modern, interactive web application designed to help learners master Taiwanese Mandarin, Zhuyin Fuhao (Bopomofo / 注音符號), and Chinese character pronunciation.
 
 ![Bopomofo Mascot](/public/mascot.jpg)
@@ -34,6 +36,7 @@ A modern, interactive web application designed to help learners master Taiwanese
 - Vocabulary flashcards and quizzes powered by the official **TOCFL** (Test of Chinese as a Foreign Language) word list.
 - Multiple difficulty levels (Novice, Level 1, Level 2, and beyond).
 - Tests character recognition, tone discrimination, and phonetic spelling.
+- **Skip Option**: Skip difficult words on demand and review them at the end of the session with native pronunciation audio.
 
 ### 6. 🔠 Accessibility & Font Scaling
 - Global font size and ruby size controls accessible from anywhere in the top navigation bar.
@@ -94,6 +97,16 @@ npm run build
 Preview the production build locally:
 ```bash
 npm run preview
+```
+
+### 🌐 Deployment
+This project is hosted on Firebase Hosting:
+- **Live URL**: [https://zhuyin-annotator.web.app/](https://zhuyin-annotator.web.app/)
+
+To deploy updates using Firebase CLI:
+```bash
+npm run build
+firebase deploy
 ```
 
 ---

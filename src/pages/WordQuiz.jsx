@@ -199,7 +199,8 @@ export default function WordQuiz() {
                 pinyin: completedWord.pinyin,
                 meaning: completedWord.meaning,
                 level: completedWord.level,
-                type: completedWord.type
+                type: completedWord.type,
+                skipped: false
             }
         ]);
 
@@ -208,6 +209,29 @@ export default function WordQuiz() {
             advanceToNextWord();
         }, 600);
     }, [streak, advanceToNextWord]);
+
+    // Handle Skip Current Word
+    const handleSkipWord = useCallback(() => {
+        if (!isQuizActive || isQuizFinished || !currentWord) return;
+
+        soundEffects.playKeypress();
+        setStreak(0);
+
+        setQuizHistory(prev => [
+            ...prev,
+            {
+                word: currentWord.word,
+                zhuyin: currentWord.zhuyin,
+                pinyin: currentWord.pinyin,
+                meaning: currentWord.meaning,
+                level: currentWord.level,
+                type: currentWord.type,
+                skipped: true
+            }
+        ]);
+
+        advanceToNextWord();
+    }, [isQuizActive, isQuizFinished, currentWord, advanceToNextWord]);
 
     // Process Text / Keystroke input
     const processInputText = useCallback((text) => {
@@ -560,6 +584,11 @@ export default function WordQuiz() {
                     </h2>
                     <p className="text-sm text-neutral-500 mb-6">
                         你完成了 {wordQueue.length} 個 {activeLevelMeta.name} 詞彙練習
+                        {quizHistory.some(item => item.skipped) && (
+                            <span className="text-amber-600 font-semibold ml-1.5">
+                                (跳過 {quizHistory.filter(i => i.skipped).length} 題)
+                            </span>
+                        )}
                     </p>
 
                     {/* Stats Highlights */}
@@ -586,16 +615,21 @@ export default function WordQuiz() {
 
                     {/* List of practiced words with audio review */}
                     <div className="text-left mb-8">
-                        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">
-                            練習詞彙回顧 (Reviewed Vocabulary):
+                        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span>練習詞彙回顧 (Reviewed Vocabulary):</span>
+                            {quizHistory.some(item => item.skipped) && (
+                                <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">
+                                    跳過 {quizHistory.filter(i => i.skipped).length} 題
+                                </span>
+                            )}
                         </h3>
                         <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
                             {quizHistory.map((item, idx) => (
                                 <div
                                     key={idx}
-                                    className="flex items-center justify-between p-2.5 rounded-lg bg-neutral-50 border border-neutral-200 text-sm"
+                                    className={`flex items-center justify-between p-2.5 rounded-lg border text-sm ${item.skipped ? 'bg-amber-50/50 border-amber-200/80' : 'bg-neutral-50 border-neutral-200'}`}
                                 >
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
                                         <button
                                             type="button"
                                             onClick={() => speakWord(item.word)}
@@ -607,6 +641,11 @@ export default function WordQuiz() {
                                         <span className="font-bold text-neutral-900 text-base">{item.word}</span>
                                         <span className="text-neutral-500 font-mono text-xs">{item.zhuyin}</span>
                                         <span className="text-neutral-400 text-xs hidden sm:inline">[{item.pinyin}]</span>
+                                        {item.skipped && (
+                                            <span data-testid="skipped-badge" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                                已跳過 (Skipped)
+                                            </span>
+                                        )}
                                     </div>
                                     <span className="text-neutral-600 text-xs font-medium truncate max-w-[200px]">
                                         {item.meaning}
@@ -674,7 +713,7 @@ export default function WordQuiz() {
                 </div>
 
                 {/* Score & HUD Counters */}
-                <div className="flex items-center gap-3 md:gap-4 text-xs">
+                <div className="flex items-center gap-2 sm:gap-3 md:gap-4 text-xs">
                     <div className="flex items-baseline gap-1">
                         <span className="text-neutral-400 font-semibold">題數:</span>
                         <span className="font-mono font-bold text-neutral-800" data-testid="word-counter">
@@ -694,6 +733,16 @@ export default function WordQuiz() {
                             <span>🔥 {streak} 連擊</span>
                         </div>
                     )}
+
+                    <button
+                        type="button"
+                        data-testid="header-skip-button"
+                        onClick={() => handleSkipWord()}
+                        className="px-2 py-1 text-xs rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-semibold transition cursor-pointer flex items-center gap-1 active:scale-95"
+                        title="跳過當前題目 (Skip current word)"
+                    >
+                        <span>⏭️ 跳過</span>
+                    </button>
                 </div>
 
                 {/* Controls (Sound, Guide, Mobile Mode, Font) */}
@@ -818,8 +867,8 @@ export default function WordQuiz() {
                         </div>
                     </div>
 
-                    {/* Audio Speech Button & Example Toggle */}
-                    <div className="flex items-center gap-2 mt-3">
+                    {/* Action Buttons: Audio, Example Toggle & Skip Option */}
+                    <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
                         <button
                             type="button"
                             onClick={(e) => {
@@ -844,6 +893,19 @@ export default function WordQuiz() {
                                 <span>📖 {showExampleSentence ? '收合例句' : '查看例句'}</span>
                             </button>
                         )}
+
+                        <button
+                            type="button"
+                            data-testid="skip-word-button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleSkipWord();
+                            }}
+                            className="px-3.5 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
+                            title="跳過當前題目 (Skip to next word)"
+                        >
+                            <span>⏭️ 跳過 (Skip)</span>
+                        </button>
                     </div>
 
                     {/* Expandable Example Sentence */}
