@@ -2,13 +2,56 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import WordQuiz from './WordQuiz';
 import { FontSizeProvider } from '../context/FontSizeContext';
+import { AuthProvider } from '../context/AuthContext';
+
+// Mock firebase/auth
+vi.mock('firebase/auth', () => ({
+    getAuth: vi.fn(() => ({})),
+    GoogleAuthProvider: vi.fn().mockImplementation(() => ({
+        setCustomParameters: vi.fn()
+    })),
+    onAuthStateChanged: vi.fn((auth, callback) => {
+        callback(null);
+        return vi.fn();
+    }),
+    signInWithPopup: vi.fn().mockResolvedValue({
+        user: {
+            uid: 'test_user_777',
+            displayName: 'Test Quizzer',
+            email: 'quizzer@example.com',
+            photoURL: ''
+        }
+    }),
+    signOut: vi.fn().mockResolvedValue()
+}));
+
+// Mock firebase/firestore
+vi.mock('firebase/firestore', () => ({
+    collection: vi.fn(),
+    addDoc: vi.fn().mockResolvedValue({ id: 'doc_123' }),
+    query: vi.fn(),
+    where: vi.fn(),
+    orderBy: vi.fn(),
+    limit: vi.fn(),
+    getDocs: vi.fn().mockResolvedValue({ forEach: vi.fn() }),
+    serverTimestamp: vi.fn(() => ({ type: 'serverTimestamp' }))
+}));
+
+// Mock ../services/firebase
+vi.mock('../services/firebase', () => ({
+    auth: {},
+    googleProvider: {},
+    db: {}
+}));
 
 // Helper to render with context
 const renderWithContext = (ui) => {
     return render(
-        <FontSizeProvider>
-            {ui}
-        </FontSizeProvider>
+        <AuthProvider>
+            <FontSizeProvider>
+                {ui}
+            </FontSizeProvider>
+        </AuthProvider>
     );
 };
 
@@ -222,6 +265,29 @@ describe('WordQuiz Component', () => {
         expect(screen.getAllByText(/跳過 5 題/i).length).toBeGreaterThanOrEqual(1);
         const skippedBadges = screen.getAllByTestId('skipped-badge');
         expect(skippedBadges.length).toBe(5);
+
+        // Verify Google auth score registration card is shown on results screen
+        expect(screen.getByText(/成績登錄與雲端記錄/i)).toBeDefined();
+        expect(screen.getByTestId('quiz-finish-google-login-btn')).toBeDefined();
+
+        // Clicking login button triggers Google sign-in
+        const googleLoginBtn = screen.getByTestId('quiz-finish-google-login-btn');
+        fireEvent.click(googleLoginBtn);
+
+        await waitFor(() => {
+            expect(screen.getByText(/已成功登錄/i)).toBeDefined();
+        });
+    });
+
+    it('renders open score history button in setup view and triggers callback', () => {
+        const onOpenScoreHistory = vi.fn();
+        renderWithContext(<WordQuiz onOpenScoreHistory={onOpenScoreHistory} />);
+
+        const historyBtn = screen.getByTestId('open-score-history-btn');
+        expect(historyBtn).toBeDefined();
+
+        fireEvent.click(historyBtn);
+        expect(onOpenScoreHistory).toHaveBeenCalledTimes(1);
     });
 });
 

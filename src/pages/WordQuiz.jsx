@@ -16,14 +16,25 @@ import {
     soundEffects
 } from '../utils/zhuyinKeyboard';
 import { useFontSize, FontSizeControl } from '../context/FontSizeContext';
+import { useAuth } from '../context/AuthContext';
+import { registerQuizScore } from '../services/quizScoreService';
+import { GoogleIcon } from '../components/AuthButton';
 
-export default function WordQuiz() {
+export default function WordQuiz({ onOpenScoreHistory }) {
+    const { user, loginWithGoogle } = useAuth();
+
     // --- Configuration & Selection State ---
     const [selectedLevel, setSelectedLevel] = useState('A');
     const [selectedType, setSelectedType] = useState('all');
     const [quizLength, setQuizLength] = useState(10);
     const [isQuizActive, setIsQuizActive] = useState(false);
     const [isQuizFinished, setIsQuizFinished] = useState(false);
+
+    // --- Score Registration State ---
+    const [savingScore, setSavingScore] = useState(false);
+    const [scoreSaved, setScoreSaved] = useState(false);
+    const [savedScoreData, setSavedScoreData] = useState(null);
+    const [saveScoreError, setSaveScoreError] = useState(null);
 
     // --- Quiz Running State ---
     const [wordQueue, setWordQueue] = useState([]);
@@ -143,6 +154,11 @@ export default function WordQuiz() {
         setQuizHistory([]);
         setStartTime(Date.now());
         setElapsedSeconds(0);
+
+        setScoreSaved(false);
+        setSavedScoreData(null);
+        setSaveScoreError(null);
+        setSavingScore(false);
 
         setIsQuizActive(true);
         setIsQuizFinished(false);
@@ -386,6 +402,43 @@ export default function WordQuiz() {
         return null;
     }, [currentChar, inputBuffer, enableKeyGuide]);
 
+    // Save current quiz score to Firebase & localStorage
+    const saveCurrentScore = useCallback(async (targetUser = user) => {
+        setSavingScore(true);
+        setSaveScoreError(null);
+        try {
+            const skippedCount = quizHistory.filter(i => i.skipped).length;
+            const res = await registerQuizScore({
+                userId: targetUser ? targetUser.uid : 'guest',
+                userEmail: targetUser ? targetUser.email : '',
+                displayName: targetUser ? (targetUser.displayName || targetUser.email?.split('@')[0]) : '匿名練習者',
+                photoURL: targetUser ? targetUser.photoURL : '',
+                score,
+                accuracy,
+                maxStreak,
+                elapsedSeconds,
+                level: selectedLevel,
+                levelName: activeLevelMeta.name,
+                totalWords: wordQueue.length,
+                skippedCount
+            });
+            setSavedScoreData(res);
+            setScoreSaved(true);
+        } catch (err) {
+            console.error('Failed to register quiz score:', err);
+            setSaveScoreError('成績儲存失敗，已暫存於本機');
+        } finally {
+            setSavingScore(false);
+        }
+    }, [user, quizHistory, score, accuracy, maxStreak, elapsedSeconds, selectedLevel, activeLevelMeta, wordQueue.length]);
+
+    // Auto register score when quiz completes if user is logged in
+    useEffect(() => {
+        if (isQuizFinished && user && !scoreSaved && !savingScore) {
+            saveCurrentScore(user);
+        }
+    }, [isQuizFinished, user, scoreSaved, savingScore, saveCurrentScore]);
+
     // =========================================================================
     // VIEW 1: QUIZ SELECTION / SETUP SCREEN
     // =========================================================================
@@ -394,19 +447,33 @@ export default function WordQuiz() {
             <div className="flex-1 w-full max-w-full overflow-y-auto p-4 md:p-8 bg-neutral-50" data-testid="word-quiz-setup">
                 <div className="max-w-4xl mx-auto">
                     {/* Header Banner */}
-                    <div className="mb-8 text-center sm:text-left">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold mb-3">
-                            <span>🎯 TOCFL 單字隨堂測驗</span>
-                            <span>•</span>
-                            <span>Word Quiz</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8">
+                        <div className="text-center sm:text-left">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold mb-3">
+                                <span>🎯 TOCFL 單字隨堂測驗</span>
+                                <span>•</span>
+                                <span>Word Quiz</span>
+                            </div>
+                            <h1 className="text-2xl md:text-3xl font-extrabold text-neutral-900 tracking-tight mb-2">
+                                TOCFL 詞彙測驗 (Word Quiz)
+                            </h1>
+                            <p className="text-sm md:text-base text-neutral-600">
+                                依據 TOCFL 等級 (Band A/B/C) 與詞性 (名詞、動詞、形容詞等) 進行注音打字測驗。
+                                支援電腦注音鍵盤與手機中文直接輸入！
+                            </p>
                         </div>
-                        <h1 className="text-2xl md:text-3xl font-extrabold text-neutral-900 tracking-tight mb-2">
-                            TOCFL 詞彙測驗 (Word Quiz)
-                        </h1>
-                        <p className="text-sm md:text-base text-neutral-600">
-                            依據 TOCFL 等級 (Band A/B/C) 與詞性 (名詞、動詞、形容詞等) 進行注音打字測驗。
-                            支援電腦注音鍵盤與手機中文直接輸入！
-                        </p>
+
+                        <div className="shrink-0 flex justify-center sm:justify-end">
+                            <button
+                                type="button"
+                                data-testid="open-score-history-btn"
+                                onClick={() => onOpenScoreHistory && onOpenScoreHistory()}
+                                className="px-3.5 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-800 text-xs sm:text-sm font-bold inline-flex items-center gap-2 shadow-2xs hover:shadow-xs transition cursor-pointer"
+                            >
+                                <span>🏆</span>
+                                <span>測驗紀錄與排行榜</span>
+                            </button>
+                        </div>
                     </div>
 
                     {/* Step 1: Select TOCFL Level */}
@@ -653,6 +720,115 @@ export default function WordQuiz() {
                                 </div>
                             ))}
                         </div>
+                    </div>
+
+                    {/* Google Authentication & Score Registration Section */}
+                    <div className="mb-8 p-4 rounded-2xl border text-left transition bg-neutral-50/70 border-neutral-200">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+                                <span>🏅</span>
+                                <span>成績登錄與雲端記錄 (Score Registration)</span>
+                            </h3>
+                            {scoreSaved && (
+                                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                    ✓ 已成功登錄
+                                </span>
+                            )}
+                        </div>
+
+                        {user ? (
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white rounded-xl border border-neutral-200">
+                                <div className="flex items-center gap-2.5">
+                                    {user.photoURL ? (
+                                        <img
+                                            src={user.photoURL}
+                                            alt={user.displayName}
+                                            referrerPolicy="no-referrer"
+                                            className="w-8 h-8 rounded-full border border-neutral-200 object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                                            {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <div className="text-xs font-bold text-neutral-900">
+                                            {user.displayName || user.email}
+                                        </div>
+                                        <div className="text-[11px] text-neutral-500">
+                                            {savingScore ? (
+                                                <span className="text-blue-600 font-medium">正在將成績儲存至雲端...</span>
+                                            ) : scoreSaved ? (
+                                                <span className="text-emerald-600 font-semibold">
+                                                    {savedScoreData?.isSynced ? '☁️ 成績已同步至 Firebase 雲端與排行榜！' : '💾 成績已儲存於本機記錄'}
+                                                </span>
+                                            ) : (
+                                                <span>已登入 Google 帳號</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    {!scoreSaved && (
+                                        <button
+                                            type="button"
+                                            onClick={() => saveCurrentScore(user)}
+                                            disabled={savingScore}
+                                            className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold transition cursor-pointer"
+                                        >
+                                            {savingScore ? '儲存中...' : '重新登錄成績'}
+                                        </button>
+                                    )}
+                                    {onOpenScoreHistory && (
+                                        <button
+                                            type="button"
+                                            onClick={onOpenScoreHistory}
+                                            className="px-3 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-semibold transition cursor-pointer border border-neutral-300"
+                                        >
+                                            查看排行榜
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-white rounded-xl border border-blue-200 shadow-2xs">
+                                <div className="space-y-0.5">
+                                    <div className="text-xs font-bold text-neutral-900 flex items-center gap-1.5">
+                                        <GoogleIcon className="w-3.5 h-3.5" />
+                                        <span>登入 Google 帳號登錄本次測驗成績</span>
+                                    </div>
+                                    <p className="text-[11px] text-neutral-500">
+                                        登入後可永久保存您的學習成績 ({score} 分)，並在全域排行榜與同好切磋！
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        type="button"
+                                        data-testid="quiz-finish-google-login-btn"
+                                        onClick={async () => {
+                                            try {
+                                                const loggedIn = await loginWithGoogle();
+                                                if (loggedIn) {
+                                                    await saveCurrentScore(loggedIn);
+                                                }
+                                            } catch (e) {
+                                                console.error('Login error:', e);
+                                            }
+                                        }}
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-neutral-900 hover:bg-neutral-800 text-white shadow-xs transition active:scale-95 cursor-pointer"
+                                    >
+                                        <GoogleIcon className="w-3.5 h-3.5" />
+                                        <span>使用 Google 登入並儲存</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {saveScoreError && (
+                            <p className="text-xs text-rose-600 mt-2 font-medium">{saveScoreError}</p>
+                        )}
                     </div>
 
                     {/* Action Buttons */}
