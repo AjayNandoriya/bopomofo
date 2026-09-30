@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { TOCFL_LEVELS, TOCFL_PARAGRAPHS } from '../data/tocflTyping';
 import { toTraditional, annotateZhuyin } from '../utils/converter';
 import { useFontSize, FontSizeControl } from '../context/FontSizeContext';
+import { getTone, getToneColor } from '../utils/toneColors';
+import ToneText from '../components/ToneText';
+import ToneLegend from '../components/ToneLegend';
 import {
     KEY_TO_ZHUYIN,
     ZHUYIN_TO_KEY,
@@ -600,7 +603,7 @@ function ZhuyinTyping() {
                                         </div>
 
                                         <h3 className="text-xl font-bold text-neutral-900 group-hover:text-blue-600 transition-colors">
-                                            {paragraph.titleZh}
+                                            <ToneText text={paragraph.titleZh} />
                                         </h3>
                                         <p className="text-sm font-medium text-neutral-500 mb-3">
                                             {paragraph.title}
@@ -621,7 +624,7 @@ function ZhuyinTyping() {
                                                         className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-700 rounded-md font-medium border border-neutral-200/60"
                                                         title={`${vocab.zhuyin} (${vocab.meaning})`}
                                                     >
-                                                        {vocab.word}
+                                                        <ToneText text={vocab.word} />
                                                     </span>
                                                 ))}
                                             </div>
@@ -667,7 +670,7 @@ function ZhuyinTyping() {
                         <div className="h-4 w-px bg-neutral-200 shrink-0"></div>
                         <div className="truncate max-w-[160px] sm:max-w-xs">
                             <h2 className="text-xs sm:text-sm md:text-base font-bold text-neutral-800 leading-tight truncate">
-                                {activeParagraph.titleZh}
+                                <ToneText text={activeParagraph.titleZh} />
                             </h2>
                             {!isFullScreen && (
                                 <p className="text-[11px] text-neutral-400 hidden sm:block truncate">
@@ -690,6 +693,7 @@ function ZhuyinTyping() {
 
                 {/* Controls (Scrollable on small mobile screens) */}
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1 no-scrollbar max-w-full">
+                    <ToneLegend compact />
                     <FontSizeControl compact />
 
                     <button
@@ -845,7 +849,13 @@ function ZhuyinTyping() {
                             <span className="text-[11px] md:text-xs font-bold uppercase tracking-wider text-neutral-400">
                                 當前目標字:
                             </span>
-                            <span className="text-xl md:text-2xl font-serif font-bold text-neutral-900">
+                            <span
+                                className="text-xl md:text-2xl font-serif font-bold"
+                                style={{
+                                    color: getToneColor(activeChar.tone || getTone(activeChar.char, activeChar.zhuyin, activeChar.pinyin))
+                                }}
+                                data-tone={activeChar.tone || getTone(activeChar.char, activeChar.zhuyin, activeChar.pinyin)}
+                            >
                                 {activeChar.char}
                             </span>
                             <span className="text-xs md:text-sm font-mono font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
@@ -996,17 +1006,22 @@ function ZhuyinTyping() {
 
                                     {/* Character + Zhuyin annotation */}
                                     <div className="flex items-center gap-0.5">
-                                        <span
-                                            className={`font-serif leading-none whitespace-pre ${isCompleted
-                                                ? 'text-emerald-700 font-bold'
-                                                : isCurrent
-                                                    ? 'text-neutral-900 font-bold'
-                                                    : 'text-neutral-700'
-                                            }`}
-                                            style={{ fontSize: `${fontSize}px` }}
-                                        >
-                                            {item.char}
-                                        </span>
+                                        {(() => {
+                                            const tone = item.tone || getTone(item.char, item.zhuyin, item.pinyin);
+                                            const toneColor = tone ? getToneColor(tone) : undefined;
+                                            return (
+                                                <span
+                                                    className={`font-serif leading-none whitespace-pre font-bold ${isCompleted ? 'opacity-85' : isCurrent ? 'scale-105' : ''}`}
+                                                    style={{
+                                                        fontSize: `${fontSize}px`,
+                                                        color: toneColor || (isCompleted ? '#047857' : isCurrent ? '#171717' : '#404040')
+                                                    }}
+                                                    data-tone={tone}
+                                                >
+                                                    {item.char}
+                                                </span>
+                                            );
+                                        })()}
 
                                         {/* Zhuyin (Vertical Right) */}
                                         {showZhuyin && !item.isPunctuation && item.zhuyin && (
@@ -1183,7 +1198,7 @@ function ZhuyinTyping() {
                             恭喜完成！(Congratulations!)
                         </h3>
                         <p className="text-sm text-neutral-500 mb-6">
-                            You completed typing: <span className="font-semibold text-neutral-800">{activeParagraph.titleZh}</span>
+                            You completed typing: <span className="font-semibold text-neutral-800"><ToneText text={activeParagraph.titleZh} /></span>
                         </p>
 
                         {/* Stats Card Grid */}

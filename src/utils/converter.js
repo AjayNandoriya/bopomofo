@@ -1,5 +1,6 @@
 import * as OpenCC from 'opencc-js';
 import { pinyin } from 'pinyin-pro';
+import { getTone } from './toneColors';
 
 // Initialize OpenCC converter
 const converter = OpenCC.Converter({ from: 'cn', to: 'tw' });
@@ -194,13 +195,16 @@ export const annotateZhuyin = (text) => {
         const char = text[index] || '';
 
         if (/[\u4e00-\u9fa5]/.test(char)) {
+            const zhuyin = convertPinyinToZhuyin(item);
+            const tone = getTone(char, zhuyin, item);
             return {
                 char,
-                zhuyin: convertPinyinToZhuyin(item),
-                pinyin: pyDataDisplay[index]
+                zhuyin,
+                pinyin: pyDataDisplay[index],
+                tone
             };
         } else {
-            return { char, zhuyin: '', pinyin: '' }; // No annotation for non-Chinese
+            return { char, zhuyin: '', pinyin: '', tone: 0 }; // No annotation for non-Chinese
         }
     });
 };

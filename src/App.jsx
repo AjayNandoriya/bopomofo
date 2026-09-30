@@ -4,6 +4,7 @@ import { FontSizeProvider, FontSizeControl } from './context/FontSizeContext'
 import { AuthProvider } from './context/AuthContext'
 import AuthButton from './components/AuthButton'
 import ScoreHistoryModal from './components/ScoreHistoryModal'
+import ToneLegend from './components/ToneLegend'
 import Translation from './pages/Translation'
 import Stories from './pages/Stories'
 import Songs from './pages/Songs'
@@ -47,6 +48,7 @@ function Layout() {
           </Link>
           {/* Mobile controls */}
           <div className="sm:hidden flex items-center gap-1.5 shrink-0">
+            <ToneLegend compact />
             <FontSizeControl compact />
             <AuthButton onOpenScoreHistory={() => setIsScoreHistoryOpen(true)} />
           </div>
@@ -63,6 +65,7 @@ function Layout() {
 
           {/* Desktop controls */}
           <div className="hidden sm:flex items-center gap-2 shrink-0 ml-2">
+            <ToneLegend compact />
             <div className="flex items-center gap-1">
               <span className="text-xs text-neutral-500 font-medium">字體:</span>
               <FontSizeControl />

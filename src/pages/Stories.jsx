@@ -2,6 +2,9 @@ import { useState, useMemo } from 'react';
 import stories from '../data/stories';
 import { toTraditional, annotateZhuyin } from '../utils/converter';
 import { useFontSize, FontSizeControl } from '../context/FontSizeContext';
+import { getTone, getToneColor } from '../utils/toneColors';
+import ToneText from '../components/ToneText';
+import ToneLegend from '../components/ToneLegend';
 
 function Stories() {
     const [selectedStory, setSelectedStory] = useState(null);
@@ -51,7 +54,9 @@ function Stories() {
                             onClick={() => handleStoryClick(story)}
                             className="p-4 sm:p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-neutral-200"
                         >
-                            <h2 className="text-xl font-bold mb-2 text-neutral-800">{story.titleZh}</h2>
+                            <h2 className="text-xl font-bold mb-2 text-neutral-800">
+                                <ToneText text={story.titleZh} />
+                            </h2>
                             <p className="text-neutral-500 text-sm">{story.title}</p>
                         </div>
                     ))}
@@ -67,6 +72,7 @@ function Stories() {
                         </button>
 
                         <div className="flex items-center gap-2 flex-wrap">
+                            <ToneLegend compact />
                             <FontSizeControl compact />
                             <button
                                 onClick={() => setMode(mode === 'zhuyin' ? 'pinyin' : 'zhuyin')}
@@ -78,7 +84,9 @@ function Stories() {
                     </div>
 
                     <div className="bg-white p-4 sm:p-6 md:p-10 rounded-xl shadow-sm border border-neutral-200 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
-                        <h2 className="text-2xl font-bold mb-1 text-center text-neutral-900">{selectedStory.titleZh}</h2>
+                        <h2 className="text-2xl font-bold mb-1 text-center text-neutral-900">
+                            <ToneText text={selectedStory.titleZh} />
+                        </h2>
                         <p className="text-center text-neutral-500 mb-8 text-sm">{selectedStory.title}</p>
 
                         <div className="space-y-6 max-w-4xl mx-auto">
@@ -106,12 +114,22 @@ function Stories() {
                                                 )}
 
                                                 <div className="flex flex-row items-center">
-                                                    <span
-                                                        className="font-serif text-neutral-800 leading-none whitespace-pre"
-                                                        style={{ fontSize: `${fontSize}px` }}
-                                                    >
-                                                        {item.char}
-                                                    </span>
+                                                    {(() => {
+                                                        const tone = item.tone || getTone(item.char, item.zhuyin, item.pinyin);
+                                                        const toneColor = tone ? getToneColor(tone) : undefined;
+                                                        return (
+                                                            <span
+                                                                className="font-serif leading-none whitespace-pre font-medium"
+                                                                style={{
+                                                                    fontSize: `${fontSize}px`,
+                                                                    color: toneColor || '#262626'
+                                                                }}
+                                                                data-tone={tone}
+                                                            >
+                                                                {item.char}
+                                                            </span>
+                                                        );
+                                                    })()}
 
                                                     {/* Zhuyin (Right) */}
                                                     {hasZhuyin && (

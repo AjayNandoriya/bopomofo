@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { toTraditional, annotateZhuyin } from '../utils/converter'
 import { useFontSize, FontSizeControl } from '../context/FontSizeContext'
+import { getTone, getToneColor } from '../utils/toneColors'
+import ToneLegend from '../components/ToneLegend'
 
 function Translation() {
     const [inputText, setInputText] = useState('')
@@ -75,6 +77,7 @@ function Translation() {
                 </h1>
 
                 <div className="flex items-center gap-2 flex-wrap">
+                    <ToneLegend compact />
                     <FontSizeControl compact />
                     <button
                         onClick={() => setMode(mode === 'zhuyin' ? 'pinyin' : 'zhuyin')}
@@ -176,12 +179,22 @@ function Translation() {
                                                         )}
 
                                                         <div className="flex flex-row items-center">
-                                                            <span
-                                                                className="font-serif text-neutral-800 leading-none whitespace-pre"
-                                                                style={{ fontSize: `${fontSize}px` }}
-                                                            >
-                                                                {item.char}
-                                                            </span>
+                                                            {(() => {
+                                                                const tone = item.tone || getTone(item.char, item.zhuyin, item.pinyin);
+                                                                const toneColor = tone ? getToneColor(tone) : undefined;
+                                                                return (
+                                                                    <span
+                                                                        className="font-serif leading-none whitespace-pre font-medium"
+                                                                        style={{
+                                                                            fontSize: `${fontSize}px`,
+                                                                            color: toneColor || '#262626'
+                                                                        }}
+                                                                        data-tone={tone}
+                                                                    >
+                                                                        {item.char}
+                                                                    </span>
+                                                                );
+                                                            })()}
 
                                                             {/* Zhuyin (Right) */}
                                                             {hasZhuyin && (

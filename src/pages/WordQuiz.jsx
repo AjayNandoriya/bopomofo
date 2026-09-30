@@ -19,6 +19,9 @@ import { useFontSize, FontSizeControl } from '../context/FontSizeContext';
 import { useAuth } from '../context/AuthContext';
 import { registerQuizScore } from '../services/quizScoreService';
 import { GoogleIcon } from '../components/AuthButton';
+import { getTone, getToneColor } from '../utils/toneColors';
+import ToneText from '../components/ToneText';
+import ToneLegend from '../components/ToneLegend';
 
 export default function WordQuiz({ onOpenScoreHistory }) {
     const { user, loginWithGoogle } = useAuth();
@@ -618,7 +621,7 @@ export default function WordQuiz({ onOpenScoreHistory }) {
                                         key={w.id}
                                         className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-neutral-200 rounded-lg text-xs font-medium text-neutral-800 shadow-2xs"
                                     >
-                                        <span className="font-bold">{w.word}</span>
+                                        <span className="font-bold"><ToneText text={w.word} /></span>
                                         <span className="text-[11px] text-neutral-400 font-mono">({w.zhuyin})</span>
                                     </span>
                                 ))}
@@ -705,7 +708,7 @@ export default function WordQuiz({ onOpenScoreHistory }) {
                                         >
                                             🔊
                                         </button>
-                                        <span className="font-bold text-neutral-900 text-base">{item.word}</span>
+                                        <span className="font-bold text-base"><ToneText text={item.word} /></span>
                                         <span className="text-neutral-500 font-mono text-xs">{item.zhuyin}</span>
                                         <span className="text-neutral-400 text-xs hidden sm:inline">[{item.pinyin}]</span>
                                         {item.skipped && (
@@ -956,6 +959,7 @@ export default function WordQuiz({ onOpenScoreHistory }) {
                         <span>{mobileInputMode === 'phone' ? '📱 手機鍵盤' : '⌨️ 螢幕鍵盤'}</span>
                     </button>
 
+                    <ToneLegend compact />
                     <FontSizeControl compact />
                 </div>
             </header>
@@ -1012,17 +1016,24 @@ export default function WordQuiz({ onOpenScoreHistory }) {
                                     </div>
 
                                     {/* Chinese Character */}
-                                    <div
-                                        className={`font-serif font-bold leading-none tracking-normal ${isActive
-                                            ? 'text-neutral-900'
-                                            : isCompleted
-                                                ? 'text-emerald-700'
-                                                : 'text-neutral-400'
-                                            }`}
-                                        style={{ fontSize: `${Math.max(fontSize, 42)}px` }}
-                                    >
-                                        {charObj.char}
-                                    </div>
+                                    {(() => {
+                                        const tone = charObj.tone || getTone(charObj.char, charObj.zhuyin, charObj.pinyin);
+                                        const toneColor = getToneColor(tone);
+                                        return (
+                                            <div
+                                                className={`font-serif font-bold leading-none tracking-normal transition-all ${
+                                                    isActive ? 'scale-105' : isCompleted ? 'opacity-90' : 'opacity-75'
+                                                }`}
+                                                style={{
+                                                    fontSize: `${Math.max(fontSize, 42)}px`,
+                                                    color: toneColor || (isActive ? '#171717' : isCompleted ? '#047857' : '#737373')
+                                                }}
+                                                data-tone={tone}
+                                            >
+                                                {charObj.char}
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* Pinyin subtitle */}
                                     <div className="text-[11px] font-mono text-neutral-400 mt-1">
@@ -1087,8 +1098,8 @@ export default function WordQuiz({ onOpenScoreHistory }) {
                     {/* Expandable Example Sentence */}
                     {showExampleSentence && currentWord?.exampleZh && (
                         <div className="mt-4 p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 text-center w-full max-w-lg animate-fadeIn">
-                            <p className="font-serif text-sm font-semibold text-neutral-900 mb-1">
-                                {currentWord.exampleZh}
+                            <p className="font-serif text-sm font-semibold mb-1">
+                                <ToneText text={currentWord.exampleZh} />
                             </p>
                             <p className="text-xs text-neutral-500 italic">
                                 {currentWord.exampleEn}
