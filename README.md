@@ -73,6 +73,10 @@ cd bopomofo
 
 # Install dependencies
 npm install
+
+# Configure environment variables (Firebase Authentication & Firestore)
+cp .env.example .env
+# Edit .env with your Firebase credentials
 ```
 
 ### Development Server
